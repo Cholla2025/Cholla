@@ -54,6 +54,14 @@ export default function App() {
           )
         })}
       </div>
+
+      <div style={{ textAlign: 'center', font: '500 11px Inter', color: '#9AA8BD', padding: '10px 0 14px' }}>
+        Built by{' '}
+        <a href="https://www.phxcw.com" target="_blank" rel="noopener noreferrer"
+          style={{ color: '#BE6A45', textDecoration: 'none', fontWeight: 600 }}>
+          Phoenix Creative Works
+        </a>
+      </div>
     </div>
   )
 }

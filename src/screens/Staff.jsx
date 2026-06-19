@@ -67,6 +67,9 @@ function Dashboard({ store }) {
 
   return (
     <div className="scroll fade cholla-scroll">
+      <div style={{ marginBottom: 14 }}>
+        <Seg options={['Facilitator', 'Leadership']} value="Facilitator" onChange={a.switchDash} />
+      </div>
       <div className="section-title">Facilitator dashboard</div>
       <div className="section-sub">{st.staffName} · {TODAY_LABEL}</div>
 

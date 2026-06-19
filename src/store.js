@@ -79,6 +79,8 @@ export function useCheckIn() {
   const goStaff = () => set((s) => ({ surface: 'staff', screen: s.staffAuthed ? 'staff-dashboard' : 'staff-auth' }))
   const goLeader = () => set((s) => ({ surface: 'leader', screen: s.leaderAuthed ? (s.leaderGroupN ? 'leader-detail' : 'leader-overview') : 'leader-auth' }))
   const resetDemo = () => { clearTimeout(timer.current); setState(makeInitialState()) }
+  // Toggle a signed-in user between the Facilitator and Leadership dashboards.
+  const switchDash = (which) => (which === 'Leadership' ? goLeader() : goStaff())
 
   // ----- kiosk -----
   const padPressCode = (d) => set((s) => {
@@ -136,7 +138,9 @@ export function useCheckIn() {
 
   // ----- staff -----
   const staffGroupObj = () => S.group(ref.current.staffSession, ref.current.staffGroup)
-  const staffVerify = () => { const s = ref.current; if (s.staffMfa.length === 6 && s.staffEmail.includes('@')) set({ staffAuthed: true, screen: 'staff-dashboard' }) }
+  // Demo sign-in unlocks BOTH dashboards: every account can reach Facilitator
+  // and Leadership and toggle between them via the in-app switch.
+  const staffVerify = () => { const s = ref.current; if (s.staffMfa.length === 6 && s.staffEmail.includes('@')) set({ staffAuthed: true, leaderAuthed: true, screen: 'staff-dashboard' }) }
   const onStaffMfa = (e) => set({ staffMfa: e.target.value.replace(/\D/g, '').slice(0, 6) })
   const staffSetSession = (sv) => { const first = S.GROUPS.find((g) => g.session === sv); set({ staffSession: sv, staffGroup: first ? first.n : ref.current.staffGroup, staffView: 'live', staffStatus: 'All', staffSearch: '' }) }
   const onStaffGroup = (e) => set({ staffGroup: parseInt(e.target.value, 10), staffView: 'live', staffStatus: 'All', staffSearch: '' })
@@ -163,7 +167,7 @@ export function useCheckIn() {
   }
 
   // ----- leader -----
-  const leaderVerify = () => { const s = ref.current; if (s.leaderMfa.length === 6 && s.leaderEmail.includes('@')) set({ leaderAuthed: true, screen: 'leader-overview' }) }
+  const leaderVerify = () => { const s = ref.current; if (s.leaderMfa.length === 6 && s.leaderEmail.includes('@')) set({ leaderAuthed: true, staffAuthed: true, screen: 'leader-overview' }) }
   const onLeaderMfa = (e) => set({ leaderMfa: e.target.value.replace(/\D/g, '').slice(0, 6) })
   const openGroup = (session, n) => set({ leaderGroupSession: session, leaderGroupN: n, screen: 'leader-detail', detailStatus: 'All', detailSearch: '' })
   const backToOverview = () => set({ leaderGroupN: null, screen: 'leader-overview' })
@@ -174,7 +178,7 @@ export function useCheckIn() {
     state, set, supabaseEnabled,
     getRoster, stats, groupClients,
     actions: {
-      goKiosk, goStaff, goLeader, resetDemo,
+      goKiosk, goStaff, goLeader, resetDemo, switchDash,
       padPressCode, padPressEntry, beginSession, beginSession2, setKMode, onMemberName, doCheck, nextMember, completeGroup,
       staffVerify, onStaffMfa, staffSetSession, onStaffGroup, toggleStaffView,
       checkInClient, checkOutClient, markAbsent, onNewName, onNewId, addClient, staffGroupObj,

@@ -1,5 +1,5 @@
 import * as S from '../seed'
-import { Chips, Kpi, Pill, Badge, Field, Empty } from '../ui'
+import { Seg, Chips, Kpi, Pill, Badge, Field, Empty } from '../ui'
 
 const TODAY_LABEL = 'Thursday, June 19, 2026'
 
@@ -65,6 +65,9 @@ function Overview({ store }) {
 
   return (
     <div className="scroll fade cholla-scroll">
+      <div style={{ marginBottom: 14 }}>
+        <Seg options={['Facilitator', 'Leadership']} value="Leadership" onChange={a.switchDash} />
+      </div>
       <div className="section-title">Leadership overview</div>
       <div className="section-sub">{st.leaderName} · {TODAY_LABEL}</div>
 

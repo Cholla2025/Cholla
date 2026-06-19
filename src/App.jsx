@@ -1,3 +1,4 @@
+import logoUrl from '../Blue Agave Logo.png'
 import { useCheckIn } from './store'
 import Kiosk from './screens/Kiosk'
 import Staff from './screens/Staff'
@@ -22,7 +23,7 @@ export default function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <img src="/blue-agave-logo.png" alt="Cholla" />
+        <img src={logoUrl} alt="Cholla" />
         <div style={{ flex: 1 }}>
           <div className="wm">Cholla</div>
           <div className="hint">{HINTS[st.surface]}</div>

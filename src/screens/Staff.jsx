@@ -74,7 +74,7 @@ function Dashboard({ store }) {
         <Seg options={S.SESSIONS} value={st.staffSession} onChange={a.staffSetSession} activeBg="#4C84C4" inactiveFg="#7A8AA3" />
       </div>
 
-      <div className="kpi-grid" style={{ marginTop: 14, gridTemplateColumns: 'repeat(2, 1fr)' }}>
+      <div className="kpi-grid" style={{ marginTop: 14 }}>
         {kpis.map((k) => <Kpi key={k.label} {...k} />)}
       </div>
 

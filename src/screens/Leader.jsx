@@ -1,5 +1,5 @@
 import * as S from '../seed'
-import { Chips, Kpi, Pill, Badge, Field, Empty } from '../ui'
+import { Seg, Chips, Kpi, Pill, Badge, Field, Empty } from '../ui'
 
 const TODAY_LABEL = 'Thursday, June 19, 2026'
 
@@ -95,7 +95,7 @@ function Overview({ store }) {
       </div>
       <input className="input" style={{ marginTop: 12 }} value={st.leaderSearch} onChange={(e) => set({ leaderSearch: e.target.value })} placeholder="Search group, facilitator, or client" />
 
-      <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="groups-grid" style={{ marginTop: 14 }}>
         {cards.length ? cards.map((g) => {
           const s = stats(g)
           const att = s.cap ? Math.round((s.ci / s.cap) * 100) : 0

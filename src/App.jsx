@@ -1,59 +1,103 @@
+import { useState, useEffect } from 'react'
 import logoUrl from '../Blue Agave Logo.png'
 import { useCheckIn } from './store'
 import Kiosk from './screens/Kiosk'
 import Staff from './screens/Staff'
 import Leader from './screens/Leader'
 
-const HINTS = {
-  kiosk: 'One device per group · privacy-first',
+// Client check-in is phone-only; the dashboards are desktop-only. We switch the
+// entire shell on this breakpoint so neither surface leaks onto the wrong device.
+const DESKTOP_QUERY = '(min-width: 900px)'
+
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(DESKTOP_QUERY).matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP_QUERY)
+    const onChange = () => setIsDesktop(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return isDesktop
+}
+
+const DESK_NAV = [
+  { key: 'staff', label: 'Staff Dashboard', go: 'goStaff' },
+  { key: 'leader', label: 'Leadership', go: 'goLeader' },
+]
+const DESK_HINTS = {
   staff: 'Authenticated · live session roster',
   leader: 'Authenticated · organization roll-up',
 }
 
-const TABS = [
-  { key: 'kiosk', label: 'Client Kiosk', sub: 'Check in', go: 'goKiosk' },
-  { key: 'staff', label: 'Staff', sub: 'Roster', go: 'goStaff' },
-  { key: 'leader', label: 'Leadership', sub: 'Dashboard', go: 'goLeader' },
-]
+function Footer() {
+  return (
+    <div className="footer-credit">
+      Built by{' '}
+      <a href="https://www.phxcw.com" target="_blank" rel="noopener noreferrer">
+        Phoenix Creative Works
+      </a>
+    </div>
+  )
+}
 
 export default function App() {
   const store = useCheckIn()
-  const { state: st, actions: a, supabaseEnabled } = store
+  const { state: st, actions: a } = store
+  const isDesktop = useIsDesktop()
 
-  return (
-    <div className="app">
-      <div className="topbar">
-        <img src={logoUrl} alt="Cholla" />
-        <div style={{ flex: 1 }}>
-          <div className="wm">Cholla</div>
-          <div className="hint">{HINTS[st.surface]}</div>
+  // Keep the active surface valid for the current device: phones land on the
+  // kiosk, desktops land on a dashboard. Never show the other device's surface.
+  useEffect(() => {
+    if (isDesktop && st.surface === 'kiosk') a.goStaff()
+    else if (!isDesktop && st.surface !== 'kiosk') a.goKiosk()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDesktop])
+
+  // ---- MOBILE: client kiosk only ----
+  if (!isDesktop) {
+    return (
+      <div className="app app--mobile">
+        <div className="topbar">
+          <img src={logoUrl} alt="Cholla" />
+          <div style={{ flex: 1 }}>
+            <div className="wm">Cholla</div>
+            <div className="hint">Client check-in</div>
+          </div>
         </div>
-        <button onClick={a.resetDemo}
-          style={{ background: 'rgba(255,255,255,.12)', color: '#fff', border: 'none', borderRadius: 10, padding: '7px 11px', font: '600 12px Inter' }}>
-          Reset demo
-        </button>
+        <Kiosk store={store} />
+        <Footer />
       </div>
+    )
+  }
 
-      {st.surface === 'kiosk' && <Kiosk store={store} />}
-      {st.surface === 'staff' && <Staff store={store} />}
-      {st.surface === 'leader' && <Leader store={store} />}
-
-      <div style={{ textAlign: 'center', font: '500 10.5px Inter', color: supabaseEnabled ? '#2E9E73' : '#9AA8BD', padding: '4px 0' }}>
-        {supabaseEnabled ? '● Live · Supabase connected' : '○ Sample data (offline demo)'}
-      </div>
-
-      <div className="tabbar">
-        {TABS.map((t) => {
-          const active = st.surface === t.key
-          return (
-            <button key={t.key} className="tab" onClick={a[t.go]}
-              style={{ background: active ? '#21314F' : 'transparent', color: active ? '#fff' : '#5A6B85' }}>
+  // ---- DESKTOP: dashboards only, full screen ----
+  const surface = st.surface === 'kiosk' ? 'staff' : st.surface
+  return (
+    <div className="app app--desktop">
+      <header className="desk-nav">
+        <img src={logoUrl} alt="Cholla" className="desk-logo" />
+        <nav className="desk-tabs">
+          {DESK_NAV.map((t) => (
+            <button key={t.key} onClick={a[t.go]} className={surface === t.key ? 'active' : ''}>
               {t.label}
-              <small style={{ color: active ? '#AEBED6' : '#9AA8BD' }}>{t.sub}</small>
             </button>
-          )
-        })}
-      </div>
+          ))}
+        </nav>
+        <div className="desk-right">
+          <span className="desk-hint">{DESK_HINTS[surface]}</span>
+          <button className="desk-reset" onClick={a.resetDemo}>Reset demo</button>
+        </div>
+      </header>
+
+      <main className="desk-main cholla-scroll">
+        <div className="desk-inner">
+          {surface === 'staff' && <Staff store={store} />}
+          {surface === 'leader' && <Leader store={store} />}
+        </div>
+        <Footer />
+      </main>
     </div>
   )
 }

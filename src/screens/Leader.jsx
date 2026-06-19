@@ -65,9 +65,6 @@ function Overview({ store }) {
 
   return (
     <div className="scroll fade cholla-scroll">
-      <div style={{ marginBottom: 14 }}>
-        <Seg options={['Facilitator', 'Leadership']} value="Leadership" onChange={a.switchDash} />
-      </div>
       <div className="section-title">Leadership overview</div>
       <div className="section-sub">{st.leaderName} · {TODAY_LABEL}</div>
 
@@ -98,7 +95,7 @@ function Overview({ store }) {
       </div>
       <input className="input" style={{ marginTop: 12 }} value={st.leaderSearch} onChange={(e) => set({ leaderSearch: e.target.value })} placeholder="Search group, facilitator, or client" />
 
-      <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="groups-grid" style={{ marginTop: 14 }}>
         {cards.length ? cards.map((g) => {
           const s = stats(g)
           const att = s.cap ? Math.round((s.ci / s.cap) * 100) : 0

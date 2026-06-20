@@ -5,7 +5,6 @@ const TODAY_LABEL = 'Thursday, June 19, 2026'
 
 export default function Leader({ store }) {
   const { state: st } = store
-  if (st.screen === 'leader-auth' || (!st.leaderAuthed)) return <Auth store={store} />
   if (st.screen === 'leader-detail' && st.leaderGroupN) return <Detail store={store} />
   return <Overview store={store} />
 }

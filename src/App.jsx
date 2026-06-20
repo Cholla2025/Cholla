@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import logoUrl from '../Blue Agave Logo.png'
 import { useCheckIn } from './store'
+import { canAccess } from './lib/auth'
 import Kiosk from './screens/Kiosk'
 import Staff from './screens/Staff'
 import Leader from './screens/Leader'
+import Admin from './screens/Admin'
+import SignIn from './screens/SignIn'
 
 // Client check-in is phone-only; the dashboards are desktop-only. We switch the
 // entire shell on this breakpoint so neither surface leaks onto the wrong device.
@@ -22,13 +25,15 @@ function useIsDesktop() {
   return isDesktop
 }
 
-const DESK_NAV = [
+const ALL_TABS = [
   { key: 'staff', label: 'Staff Dashboard', go: 'goStaff' },
   { key: 'leader', label: 'Leadership', go: 'goLeader' },
+  { key: 'admin', label: 'Admin', go: 'goAdmin' },
 ]
 const DESK_HINTS = {
   staff: 'Authenticated · live session roster',
   leader: 'Authenticated · organization roll-up',
+  admin: 'Administrator · manage groups & staff',
 }
 
 function Footer() {
@@ -47,15 +52,14 @@ export default function App() {
   const { state: st, actions: a } = store
   const isDesktop = useIsDesktop()
 
-  // Keep the active surface valid for the current device: phones land on the
-  // kiosk, desktops land on a dashboard. Never show the other device's surface.
+  // Keep the active surface valid for the current device.
   useEffect(() => {
     if (isDesktop && st.surface === 'kiosk') a.goStaff()
     else if (!isDesktop && st.surface !== 'kiosk') a.goKiosk()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDesktop])
 
-  // ---- MOBILE: client kiosk only ----
+  // ---- MOBILE: client kiosk only (open, no sign-in) ----
   if (!isDesktop) {
     return (
       <div className="app app--mobile">
@@ -72,14 +76,25 @@ export default function App() {
     )
   }
 
-  // ---- DESKTOP: dashboards only, full screen ----
-  const surface = st.surface === 'kiosk' ? 'staff' : st.surface
+  // ---- DESKTOP: dashboards, behind sign-in ----
+  if (!st.authReady) {
+    return <div className="app app--desktop"><div className="signin-wrap">Loading…</div></div>
+  }
+  if (!st.authUser) {
+    return <div className="app app--desktop"><SignIn store={store} /><Footer /></div>
+  }
+
+  const role = st.authRole
+  const tabs = ALL_TABS.filter((t) => canAccess(role, t.key))
+  let surface = st.surface === 'kiosk' ? 'staff' : st.surface
+  if (!canAccess(role, surface)) surface = tabs[0]?.key || 'staff'
+
   return (
     <div className="app app--desktop">
       <header className="desk-nav">
         <img src={logoUrl} alt="Cholla" className="desk-logo" />
         <nav className="desk-tabs">
-          {DESK_NAV.map((t) => (
+          {tabs.map((t) => (
             <button key={t.key} onClick={a[t.go]} className={surface === t.key ? 'active' : ''}>
               {t.label}
             </button>
@@ -88,6 +103,7 @@ export default function App() {
         <div className="desk-right">
           <span className="desk-hint">{DESK_HINTS[surface]}</span>
           <button className="desk-reset" onClick={a.resetDemo}>Reset demo</button>
+          <button className="desk-reset" onClick={a.signOutUser}>Sign out</button>
         </div>
       </header>
 
@@ -95,6 +111,7 @@ export default function App() {
         <div className="desk-inner">
           {surface === 'staff' && <Staff store={store} />}
           {surface === 'leader' && <Leader store={store} />}
+          {surface === 'admin' && <Admin store={store} />}
         </div>
         <Footer />
       </main>

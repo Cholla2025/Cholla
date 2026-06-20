@@ -5,8 +5,6 @@ const TODAY_LABEL = 'Thursday, June 19, 2026'
 const STATUS_FILTERS = ['All', 'Checked In', 'Checked Out', 'Expected', 'Late', 'Absent']
 
 export default function Staff({ store }) {
-  const { state: st } = store
-  if (st.screen !== 'staff-dashboard') return <Auth store={store} />
   return <Dashboard store={store} />
 }
 

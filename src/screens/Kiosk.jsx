@@ -19,10 +19,9 @@ function Start({ st, set, a }) {
   const begin = st.kCode.length === 4
   return (
     <div className="scroll fade cholla-scroll">
-      <div className="section-title">Group Check-In Kiosk</div>
-      <div className="section-sub">Facilitator setup</div>
+      <div className="kiosk-title">Facilitator setup</div>
 
-      <div className="card" style={{ marginTop: 16 }}>
+      <div className="kiosk-block">
         <span className="lab">Session time</span>
         <Seg options={S.SESSIONS} value={st.kSession} onChange={(o) => set({ kSession: o })}
           activeBg="#4C84C4" />
@@ -39,10 +38,10 @@ function Start({ st, set, a }) {
             )
           })}
         </div>
-        <div style={{ font: '600 13px Inter', color: st.kGroup ? '#21314F' : '#9AA8BD', marginTop: 12 }}>{kGroupLabel}</div>
+        <div style={{ font: '600 13px Inter', color: st.kGroup ? '#21314F' : '#9AA8BD', marginTop: 12, textAlign: 'center' }}>{kGroupLabel}</div>
       </div>
 
-      <div className="card" style={{ marginTop: 14 }}>
+      <div className="kiosk-block">
         <span className="lab">Facilitator code</span>
         <div className="codedots">
           {[0, 1, 2, 3].map((i) => (

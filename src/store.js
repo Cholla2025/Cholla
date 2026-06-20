@@ -1,6 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import * as S from './seed'
 import { fetchOverrides, saveRoster, supabaseEnabled } from './lib/data'
+import { getCurrentUser, fetchProfile, sendToken, verifyToken, signOut, onAuthChange } from './lib/auth'
+
+// Auth fields are kept separate from the demo state so "Reset demo" never logs
+// anyone out.
+function makeAuthState() {
+  return {
+    authReady: false, authUser: null, authRole: null, authName: '',
+    authEmail: '', authToken: '', authStep: 'email', authBusy: false,
+    authErr: '', authSent: false,
+  }
+}
 
 function makeInitialState() {
   return {
@@ -18,6 +29,7 @@ function makeInitialState() {
     detailStatus: 'All', detailSearch: '',
     newName: '', newId: '',
     rosters: { 'Afternoon-3': S.initialRoster() },
+    ...makeAuthState(),
   }
 }
 
@@ -48,6 +60,53 @@ export function useCheckIn() {
     return () => { alive = false }
   }, [set])
 
+  // ----- auth -----
+  // Resolve a signed-in user into role + display name (or clear when signed out).
+  const applyUser = useCallback(async (user) => {
+    if (!user) { set({ authUser: null, authRole: null, authName: '', authReady: true }); return }
+    const profile = await fetchProfile(user.id)
+    const role = profile?.role || 'facilitator'
+    const name = profile?.full_name || user.email || ''
+    set((prev) => ({
+      authUser: { id: user.id, email: user.email }, authRole: role, authName: name,
+      authReady: true, authErr: '', authToken: '', authStep: 'email', authSent: false,
+      staffName: name || prev.staffName, leaderName: name || prev.leaderName,
+    }))
+  }, [set])
+
+  useEffect(() => {
+    let unsub = () => {}
+    if (!supabaseEnabled) {
+      // No backend configured: run as a demo admin so the dashboards are usable.
+      set({ authReady: true, authUser: { id: 'demo' }, authRole: 'admin', authName: 'Demo Admin' })
+      return
+    }
+    getCurrentUser().then(applyUser)
+    unsub = onAuthChange((user) => applyUser(user))
+    return () => unsub()
+  }, [applyUser, set])
+
+  const setAuthEmail = (e) => set({ authEmail: e.target.value, authErr: '' })
+  const setAuthToken = (e) => set({ authToken: e.target.value.replace(/\D/g, '').slice(0, 8), authErr: '' })
+  const backToEmail = () => set({ authStep: 'email', authToken: '', authErr: '', authSent: false })
+  const sendAuthToken = async () => {
+    const email = ref.current.authEmail.trim()
+    if (!email.includes('@')) { set({ authErr: 'Enter a valid work email' }); return }
+    set({ authBusy: true, authErr: '' })
+    const { error } = await sendToken(email)
+    if (error) set({ authBusy: false, authErr: error.message || 'Could not send a code to that email' })
+    else set({ authBusy: false, authSent: true, authStep: 'token' })
+  }
+  const verifyAuthToken = async () => {
+    const { authEmail, authToken } = ref.current
+    if (authToken.length < 6) { set({ authErr: 'Enter the code from your email' }); return }
+    set({ authBusy: true, authErr: '' })
+    const { user, error } = await verifyToken(authEmail, authToken)
+    if (error || !user) set({ authBusy: false, authErr: error?.message || 'That code did not match' })
+    else { set({ authBusy: false }); await applyUser(user) }
+  }
+  const signOutUser = async () => { await signOut(); set({ ...makeAuthState(), authReady: true, surface: 'kiosk' }) }
+
   // ----- roster helpers -----
   const curRoster = (g, rosters) => {
     const k = S.rosterKey(g)
@@ -74,11 +133,17 @@ export function useCheckIn() {
     writeRoster(g, next, { demoMin: s.demoMin + 1 })
   }
 
-  // ----- navigation -----
+  // ----- navigation ----- (access is gated at the app shell by role)
   const goKiosk = () => set((s) => ({ surface: 'kiosk', screen: s.screen.startsWith('kiosk') ? s.screen : 'kiosk-start' }))
-  const goStaff = () => set((s) => ({ surface: 'staff', screen: s.staffAuthed ? 'staff-dashboard' : 'staff-auth' }))
-  const goLeader = () => set((s) => ({ surface: 'leader', screen: s.leaderAuthed ? (s.leaderGroupN ? 'leader-detail' : 'leader-overview') : 'leader-auth' }))
-  const resetDemo = () => { clearTimeout(timer.current); setState(makeInitialState()) }
+  const goStaff = () => set({ surface: 'staff', screen: 'staff-dashboard' })
+  const goLeader = () => set((s) => ({ surface: 'leader', screen: s.leaderGroupN ? 'leader-detail' : 'leader-overview' }))
+  const goAdmin = () => set({ surface: 'admin', screen: 'admin' })
+  // Reset the demo roster state without disturbing the signed-in session.
+  const resetDemo = () => {
+    clearTimeout(timer.current)
+    const { authReady, authUser, authRole, authName } = ref.current
+    setState({ ...makeInitialState(), authReady, authUser, authRole, authName, surface: ref.current.surface, screen: ref.current.screen })
+  }
   // Toggle a signed-in user between the Facilitator and Leadership dashboards.
   const switchDash = (which) => (which === 'Leadership' ? goLeader() : goStaff())
 
@@ -178,7 +243,8 @@ export function useCheckIn() {
     state, set, supabaseEnabled,
     getRoster, stats, groupClients,
     actions: {
-      goKiosk, goStaff, goLeader, resetDemo, switchDash,
+      goKiosk, goStaff, goLeader, goAdmin, resetDemo, switchDash,
+      setAuthEmail, setAuthToken, sendAuthToken, verifyAuthToken, backToEmail, signOutUser,
       padPressCode, padPressEntry, beginSession, beginSession2, setKMode, onMemberName, doCheck, nextMember, completeGroup,
       staffVerify, onStaffMfa, staffSetSession, onStaffGroup, toggleStaffView,
       checkInClient, checkOutClient, markAbsent, onNewName, onNewId, addClient, staffGroupObj,

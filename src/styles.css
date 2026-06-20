@@ -344,3 +344,48 @@ a { color: inherit; }
 .divider { height: 1px; background: var(--line); margin: 16px 0; }
 .row { display: flex; gap: 10px; }
 .muted { color: var(--muted); }
+
+/* Sign-in (desktop) */
+.signin-wrap {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--muted);
+  font: 600 15px Inter;
+}
+.signin-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 30px 28px;
+  box-shadow: 0 30px 80px -40px rgba(33,49,79,.45);
+  text-align: center;
+}
+.signin-logo { height: 46px; width: auto; margin-bottom: 14px; }
+.signin-title { font: 700 22px Inter; color: var(--ink); }
+.signin-sub { font: 500 13px Inter; color: var(--muted); margin: 6px 0 20px; }
+.signin-card .field { text-align: left; }
+.signin-row { display: flex; justify-content: space-between; margin-top: 14px; }
+.signin-link { background: none; border: none; color: var(--blue); font: 600 12.5px Inter; padding: 0; }
+.signin-link:disabled { color: #9AA8BD; }
+.signin-err {
+  background: #F7E3E0; color: #B14233;
+  border-radius: 10px; padding: 10px 12px;
+  font: 600 12.5px Inter; margin-top: 14px;
+}
+
+/* Admin */
+.admin-section { margin-top: 22px; }
+.admin-h { font: 700 16px Inter; color: var(--ink); margin-bottom: 10px; }
+.admin-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.admin-form .field { margin-bottom: 0; }

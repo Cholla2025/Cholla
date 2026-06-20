@@ -63,12 +63,9 @@ export default function App() {
   if (!isDesktop) {
     return (
       <div className="app app--mobile">
-        <div className="topbar">
-          <img src={logoUrl} alt="Cholla" />
-          <div style={{ flex: 1 }}>
-            <div className="wm">Cholla</div>
-            <div className="hint">Client check-in</div>
-          </div>
+        <div className="kiosk-header">
+          <img src={logoUrl} alt="Cholla Behavioral Health" />
+          <div className="kiosk-eyebrow">Group Check-In Kiosk</div>
         </div>
         <Kiosk store={store} />
         <Footer />

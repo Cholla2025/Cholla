@@ -402,6 +402,29 @@ a { color: inherit; }
   border-radius: 10px; padding: 10px 12px;
   font: 600 12.5px Inter; margin-top: 14px;
 }
+/* Microsoft sign-in button — per brand guidance: white, bordered, logo left */
+.ms-btn {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: #fff; color: #3C4043;
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 16px; font: 600 14.5px Inter;
+  box-shadow: 0 6px 16px -10px rgba(33,49,79,.35);
+  transition: background .15s ease;
+}
+.ms-btn:hover { background: #F6F8FB; }
+.signin-divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 16px 0 14px; color: var(--muted); font: 600 11.5px Inter;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.signin-divider::before, .signin-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--line);
+}
+.code-input {
+  text-align: center; font: 700 24px Inter !important;
+  letter-spacing: .45em; padding-left: calc(14px + .45em);
+}
 
 /* Admin */
 .admin-section { margin-top: 22px; }

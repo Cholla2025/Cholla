@@ -49,38 +49,93 @@ export async function initBackend() {
 // ---------------------------------------------------------------------------
 
 export const ACCESS = {
-  facilitator: ['staff'],
-  leader: ['staff', 'leader'],
-  admin: ['staff', 'leader'],
+  facilitator: ['staff', 'settings'],
+  leader: ['staff', 'leader', 'settings'],
+  admin: ['staff', 'leader', 'settings'],
 }
 
 export function canAccess(role, surface) {
   return (ACCESS[role] || []).includes(surface)
 }
 
-const KNOWN_ROLES = ['admin', 'leader', 'facilitator']
+// ----- email-code session token -----
+// Issued by /api/auth/verify-code, signed server-side, held only in this
+// browser. Sent as a Bearer header; the API re-checks the staff record on
+// every request so deactivating an account revokes access immediately.
 
+const TOKEN_KEY = 'cholla-session'
+
+function getToken() {
+  try { return localStorage.getItem(TOKEN_KEY) } catch { return null }
+}
+
+export function setToken(token) {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch { /* private mode — session lasts the tab */ }
+}
+
+// Who is signed in right now? The API resolves BOTH paths — the platform's
+// Entra ID principal (cookie) and our email-code Bearer token — and returns
+// the effective role, so the client never computes authorization itself.
 export async function getUser() {
   if (!live) {
     // Demo mode: the dashboards are open so the flows can be exercised.
-    return { id: 'demo', name: 'Demo Leader', email: 'demo@example.org', role: 'admin' }
+    return { id: 'demo', name: 'Demo Leader', email: 'demo@example.org', role: 'admin', provider: 'demo' }
   }
   try {
-    const res = await fetch('/.auth/me')
-    if (!res.ok) return null
-    const { clientPrincipal } = await res.json()
-    if (!clientPrincipal) return null
-    const roles = clientPrincipal.userRoles || []
-    const role = KNOWN_ROLES.find((r) => roles.includes(r)) || null
-    return {
-      id: clientPrincipal.userId,
-      name: clientPrincipal.userDetails,
-      email: clientPrincipal.userDetails,
-      role,
+    const headers = { Accept: 'application/json' }
+    const token = getToken()
+    if (token) headers.Authorization = 'Bearer ' + token
+    const res = await fetch('/api/auth/me', { headers })
+    if (!res.ok) {
+      if (res.status === 401) setToken(null) // stale/expired token
+      return null
     }
+    const { user } = await res.json()
+    if (!user) return null
+    return { id: user.email, name: user.name, email: user.email, role: user.role || null, provider: user.provider }
   } catch {
     return null
   }
+}
+
+// Ask the server to email a 6-digit sign-in code. Always resolves ok for a
+// well-formed email (the server never reveals which addresses exist). In
+// local dev with no email service the code comes back as devCode.
+export async function requestLoginCode(email) {
+  return api('/auth/request-code', { method: 'POST', body: JSON.stringify({ email }) })
+}
+
+// Exchange the emailed code for a 12-hour session. Stores the token and
+// returns { email, name, role } — throws with a friendly message otherwise.
+export async function verifyLoginCode(email, code) {
+  const out = await api('/auth/verify-code', { method: 'POST', body: JSON.stringify({ email, code }) })
+  if (out && out.token) setToken(out.token)
+  return out ? out.user : null
+}
+
+export async function updateProfile(name) {
+  const out = await api('/auth/profile', { method: 'POST', body: JSON.stringify({ name }) })
+  return out ? out.user : null
+}
+
+// ----- staff sign-in accounts (Settings → Admin / Team) -----
+
+export async function fetchStaffAccounts() {
+  if (!live) return { staff: [], adminEmails: ['demo-admin@example.org'] }
+  return api('/staff')
+}
+
+export async function upsertStaffAccount(rec) {
+  if (!live) return { staff: rec }
+  return api('/staff', { method: 'POST', body: JSON.stringify(rec) })
+}
+
+export async function removeStaffAccount(email) {
+  if (!live) return null
+  return api('/staff/' + encodeURIComponent(email), { method: 'DELETE' })
 }
 
 export function loginUrl() {
@@ -89,6 +144,14 @@ export function loginUrl() {
 
 export function logoutUrl() {
   return '/.auth/logout?post_logout_redirect_uri=/'
+}
+
+// End whichever kind of session is active. Email-code sessions live in this
+// browser only; Microsoft sessions must round-trip the platform logout.
+export function signOut(provider) {
+  setToken(null)
+  if (provider === 'aad') window.location.href = logoutUrl()
+  else window.location.reload()
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +169,8 @@ export function setKioskCode(code) {
 async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) }
   if (kioskCode) headers['x-kiosk-code'] = kioskCode
+  const token = getToken()
+  if (token) headers.Authorization = 'Bearer ' + token
   const res = await fetch('/api' + path, { ...opts, headers })
   if (!res.ok) {
     let msg = 'Request failed (' + res.status + ')'

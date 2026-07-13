@@ -1,5 +1,9 @@
 # Deployment Runbook — Cholla Check-In on Azure
 
+> **First deployment?** Use [GO-LIVE.md](GO-LIVE.md) — the complete,
+> checkbox-driven go-live walkthrough (including the email sign-in service
+> and in-app staff onboarding). This file is the condensed reference.
+
 This guide takes you from nothing to a live, HIPAA-conscious deployment on
 Azure Static Web Apps. It assumes no prior Azure experience — every step is a
 portal click-path or a single command. Budget about 45 minutes end to end.
@@ -108,6 +112,10 @@ Static Web App → **Settings → Environment variables** (older portals:
 | `KIOSK_CODE` | The facilitator day code for the kiosk keypad — **exactly 4 digits** (the keypad accepts only 4). **Required**: until it is set, kiosk unlock is disabled entirely (the API fails closed; the `0000` fallback exists only on a local dev machine). |
 | `AZURE_CLIENT_ID` | Application (client) ID from step 3.4 |
 | `AZURE_CLIENT_SECRET` | Client secret value from step 3.5 |
+| `SESSION_SECRET` | Long random string (32+ chars — e.g. `openssl rand -base64 48`) that signs email-code sessions. **Required for email one-time-code sign-in.** Treat like a password. |
+| `ADMIN_EMAILS` | Comma-separated bootstrap admin email(s), owner first. These addresses can sign in as `admin` before any staff accounts exist — this is how the first admin gets in. **Required.** |
+| `ACS_CONNECTION_STRING` | Azure Communication Services connection string (ACS resource → **Keys**). **Required for email sign-in.** Treat like a password. See [GO-LIVE.md](GO-LIVE.md) Phase 2 for creating the email service. |
+| `ACS_SENDER` | Verified sender address from your provisioned email domain, e.g. `DoNotReply@<your-domain>.azurecomm.net`. **Required for email sign-in.** |
 | `CLINIC_TIMEZONE` | Optional, defaults to `America/Phoenix`. Defines the clinic's calendar day — kiosks may only read/write rosters for the current day (±1) in this timezone. |
 
 Click **Apply**. Settings take effect within a minute; no redeploy needed.
@@ -120,10 +128,20 @@ Brute-force protection: failed unlock attempts are rate limited (10 per IP,
 100 total, per 15 minutes) and the comparison is timing-safe. Weekly code
 rotation keeps the small 4-digit space safe in practice.
 
-## Step 6 — Invite staff and assign roles
+## Step 6 — Onboard staff and assign roles
 
-Access is deny-by-default: signing in with a Microsoft account grants
-nothing until you assign a role.
+Access is deny-by-default: signing in grants nothing until a role resolves.
+There are **two ways** to onboard staff — see [GO-LIVE.md](GO-LIVE.md)
+Phase 6 for the full walkthrough of both:
+
+**Primary — in-app (Settings → Admin):** sign in as a bootstrap admin (an
+address in `ADMIN_EMAILS`), open **Settings → Admin**, and create a staff
+account with email + display name + role. That person can immediately sign
+in with an emailed one-time code, and the Microsoft button also works for
+them if their work account's email matches. This is the day-to-day way.
+
+**Alternative — SWA Role-management invitations** (Microsoft-sign-in-only
+onboarding, managed from the Azure portal):
 
 1. Static Web App → **Settings → Role management** → **Invite**.
 2. Authorization provider: **Azure Active Directory**. Invitee: the staff
@@ -136,6 +154,9 @@ nothing until you assign a role.
    sign in with their work account, and are in. Links expire — regenerate
    if someone waits too long.
 4. Repeat per person. To revoke access later, delete them from this list.
+
+Roles resolve from **either** source (matching staff account *or*
+invitation), so to fully offboard someone, remove them from both.
 
 ## Step 7 — Go-live smoke test
 
@@ -206,7 +227,9 @@ Create `api/local.settings.json` first (gitignored; template at
     "FUNCTIONS_WORKER_RUNTIME": "node",
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "STORAGE_CONNECTION_STRING": "UseDevelopmentStorage=true",
-    "KIOSK_CODE": "0000"
+    "KIOSK_CODE": "0000",
+    "SESSION_SECRET": "local-dev-secret-at-least-32-characters-long",
+    "ADMIN_EMAILS": "you@example.com"
   }
 }
 ```
@@ -214,7 +237,14 @@ Create `api/local.settings.json` first (gitignored; template at
 Open the URL the SWA CLI prints (default `http://localhost:4280`). Hitting a
 staff page triggers the CLI's **fake auth screen** — enter any name and add
 `facilitator`, `leader`, or `admin` to the roles field to simulate that role.
-The kiosk unlocks with the local `KIOSK_CODE` (`0000` above). Requires
+The kiosk unlocks with the local `KIOSK_CODE` (`0000` above).
+
+To exercise the **email one-time-code sign-in** locally, set
+`SESSION_SECRET` and `ADMIN_EMAILS` as above. With no ACS configured (no
+`ACS_CONNECTION_STRING`/`ACS_SENDER`), no email is sent — locally the
+request-code response includes a `devCode` field with the 6-digit code, so
+you can complete the flow without a mail service. This only happens in
+local development; in production the code is only ever delivered by email. Requires
 Node 18+ and the Azure Functions Core Tools (the SWA CLI offers to install
 them on first run).
 
@@ -251,7 +281,12 @@ them on first run).
 | `/api/org` returns 500 | Missing/typo'd `STORAGE_CONNECTION_STRING`. Check step 5, then Static Web App → **Functions → (any function) → Monitor** or Application Insights for the error. |
 | Kiosk code always rejected | `KIOSK_CODE` not set (kiosk unlock is disabled until it is) or set with stray whitespace or more/fewer than 4 digits. Fix the app setting, **Apply**, retry — no redeploy needed. |
 | Staff sign-in loops or errors (`AADSTS…`) | Redirect URI missing/wrong (step 3.7 — must end in `/.auth/login/aad/callback`), `<YOUR-TENANT-ID>` not replaced in `staticwebapp.config.json`, or `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET` missing/expired. |
-| Signed in but stuck on "access pending" | The account has no role yet — invite it in **Role management** (step 6) with `facilitator`, `leader`, or `admin`, and make sure they accepted the invite link. |
+| Signed in but stuck on "access pending" | The account has no role yet — add a matching staff account in **Settings → Admin** in the app, or invite it in **Role management** (step 6), and make sure any invite link was accepted. |
+| Microsoft sign-in works but "access pending" | The Microsoft account's email has no matching **active** staff account (Settings → Admin) **and** no SWA invitation. Add one; the staff-account email must match the Microsoft account's email. |
+| Sign-in code email never arrives | Check spam (sender `DoNotReply@...azurecomm.net`); the address must be an **active** staff account or in `ADMIN_EMAILS` (others are silently ignored); `ACS_SENDER` must exactly match the provisioned domain's MailFrom address; the domain must be **connected** to the ACS resource (ACS → **Email → Domains**); `ACS_CONNECTION_STRING` present. See GO-LIVE.md troubleshooting. |
+| Email sign-in returns 503 "not configured" | `SESSION_SECRET`, `ACS_CONNECTION_STRING`, or `ACS_SENDER` missing from app settings. Add, **Apply**, retry. |
+| "Account deactivated" at sign-in | The staff account was deactivated in **Settings → Admin**; an admin can reactivate it there. |
+| Bootstrap admin can't get in | `ADMIN_EMAILS` typo, casing, or stray-whitespace mismatch with the address typed at sign-in. Fix the app setting (comma-separated, no spaces), **Apply**, request a fresh code. |
 | Leader actions fail with 403 | The account has `facilitator` only. Org changes need `leader` or `admin`. |
 | Rosters return 401 on the kiosk | Kiosk was unlocked with an old code after a `KIOSK_CODE` rotation — re-enter the current code. |
 | GitHub Action fails at deploy step | `AZURE_STATIC_WEB_APPS_API_TOKEN` secret missing/stale. Regenerate: Static Web App → **Manage deployment token**, update the repo secret, re-run. |

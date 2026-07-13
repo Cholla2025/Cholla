@@ -5,6 +5,7 @@ import { canAccess } from './lib/backend'
 import Kiosk from './screens/Kiosk'
 import Staff from './screens/Staff'
 import Leader from './screens/Leader'
+import Settings from './screens/Settings'
 import SignIn from './screens/SignIn'
 
 // Client check-in is for phones/tablets; the dashboards are desktop-only. We
@@ -42,10 +43,12 @@ function useIsDesktop() {
 const ALL_TABS = [
   { key: 'staff', label: 'Facilitator Dashboard', go: 'goStaff' },
   { key: 'leader', label: 'Leadership', go: 'goLeader' },
+  { key: 'settings', label: 'Settings', go: 'goSettings' },
 ]
 const DESK_HINTS = {
   staff: 'Authenticated · live session roster',
   leader: 'Authenticated · roll-up & day-of settings',
+  settings: 'Authenticated · profile, team & access',
 }
 
 function Footer() {
@@ -142,6 +145,7 @@ export default function App() {
         <div className="desk-inner">
           {surface === 'staff' && <Staff store={store} />}
           {surface === 'leader' && <Leader store={store} />}
+          {surface === 'settings' && <Settings store={store} />}
         </div>
         <Footer />
       </main>

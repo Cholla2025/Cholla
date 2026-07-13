@@ -14,7 +14,7 @@ export default function Leader({ store }) {
           value={st.leaderView === 'settings' ? 'Day-of settings' : 'Overview'}
           onChange={(o) => a.setLeaderView(o === 'Day-of settings' ? 'settings' : 'overview')} />
       </div>
-      {st.leaderView === 'settings' ? <Settings store={store} /> : <Overview store={store} />}
+      {st.leaderView === 'settings' ? <OrgSettings store={store} /> : <Overview store={store} />}
     </div>
   )
 }
@@ -112,7 +112,9 @@ function Overview({ store }) {
   )
 }
 
-function Settings({ store }) {
+// Org management (facilitators + groups). Shared: it renders inside the
+// Leadership "Day-of settings" view AND the Settings tab's Team section.
+export function OrgSettings({ store }) {
   const { state: st, facLabelFor, actions: a } = store
   const [nf, setNf] = useState({ name: '', credential: '', email: '' })
   const [ng, setNg] = useState({ session: 'Morning', n: '', name: 'Morning IOP', facilitatorId: '' })

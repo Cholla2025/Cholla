@@ -93,7 +93,7 @@ export function useCheckIn() {
           demoMin: live ? d.getHours() * 60 + d.getMinutes() : prev.demoMin,
           staffGroup: reconcileStaffGroup(nextOrg, prev.staffSession, prev.staffGroup),
           authReady: true,
-          authUser: user ? { id: user.id, email: user.email } : null,
+          authUser: user ? { id: user.id, email: user.email, provider: user.provider } : null,
           authRole: user ? user.role : null,
           authName: user ? user.name : '',
           staffName: user?.name || prev.staffName,
@@ -137,8 +137,43 @@ export function useCheckIn() {
   }, [set])
 
   const signOutUser = () => {
-    if (ref.current.live) window.location.href = B.logoutUrl()
+    if (ref.current.live) B.signOut(ref.current.authUser?.provider)
     // Demo mode has no real session to end.
+  }
+
+  // Called by the sign-in screen after a successful email-code exchange: the
+  // token is already stored, so adopt the identity and pull live data the
+  // same way startup does.
+  const adoptSession = async (user) => {
+    const org = await B.fetchOrg().catch(() => null)
+    const rosters = await B.fetchRosters(S.todayISO())
+    set((prev) => {
+      const nextOrg = org && Array.isArray(org.groups)
+        ? { groups: sortGroups(org.groups), facilitators: org.facilitators || [] }
+        : prev.org
+      return {
+        org: nextOrg,
+        rosters: { ...prev.rosters, ...rosters },
+        staffGroup: reconcileStaffGroup(nextOrg, prev.staffSession, prev.staffGroup),
+        authUser: { id: user.email, email: user.email, provider: 'email' },
+        authRole: user.role || null,
+        authName: user.name || '',
+        staffName: user.name || prev.staffName,
+        leaderName: user.name || prev.leaderName,
+      }
+    })
+  }
+
+  // Settings → My profile. Persists the display name to the caller's own
+  // staff record and updates every place the name shows.
+  const saveProfile = async (name) => {
+    try {
+      if (ref.current.live) await B.updateProfile(name)
+      set({ authName: name, staffName: name, leaderName: name })
+      return true
+    } catch {
+      return false
+    }
   }
 
   // ----- org management (Leadership → Day-of settings) -----
@@ -276,6 +311,7 @@ export function useCheckIn() {
   const goKiosk = () => set((s) => ({ surface: 'kiosk', screen: s.screen.startsWith('kiosk') ? s.screen : 'kiosk-start' }))
   const goStaff = () => set({ surface: 'staff', screen: 'staff-dashboard' })
   const goLeader = () => set((s) => ({ surface: 'leader', screen: s.leaderGroupN ? 'leader-detail' : 'leader-overview' }))
+  const goSettings = () => set({ surface: 'settings', screen: 'settings' })
   // Reset the demo roster state without disturbing sign-in, org, or live data.
   const resetDemo = () => {
     clearTimeout(timer.current)
@@ -420,7 +456,7 @@ export function useCheckIn() {
     getRoster, stats, groupClients,
     groupsFor, getGroup, facById, facLabelFor,
     actions: {
-      goKiosk, goStaff, goLeader, resetDemo, signOutUser,
+      goKiosk, goStaff, goLeader, goSettings, resetDemo, signOutUser, adoptSession, saveProfile,
       addGroup, removeGroup, assignFacilitator, addFacilitator, removeFacilitator,
       padPressCode, setKSession, beginSession, beginSession2, setKMode, onMemberName, doCheck, nextMember, completeGroup,
       staffSetSession, onStaffGroup, toggleStaffView,

@@ -70,6 +70,9 @@ a { color: inherit; }
   background: #fff;
 }
 .kiosk-header img { height: 56px; width: auto; }
+/* The front page leads with the brand — noticeably larger logo, still tidy */
+.kiosk-header--home { padding-top: 34px; gap: 10px; }
+.kiosk-header--home img { height: 92px; }
 .kiosk-eyebrow {
   font: 700 12px Inter;
   letter-spacing: .14em;

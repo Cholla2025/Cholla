@@ -97,7 +97,7 @@ function KioskShell({ store, initialArea }) {
 
   return (
     <div className="app app--mobile">
-      <div className="kiosk-header">
+      <div className={'kiosk-header' + (area ? '' : ' kiosk-header--home')}>
         <img src={logoUrl} alt="Cholla Behavioral Health" />
         <div className="kiosk-eyebrow">{AREA_EYEBROWS[area] || 'Check-In'}</div>
       </div>

@@ -117,6 +117,10 @@ Static Web App → **Settings → Environment variables** (older portals:
 | `ACS_CONNECTION_STRING` | Azure Communication Services connection string (ACS resource → **Keys**). **Required for email sign-in.** Treat like a password. See [GO-LIVE.md](GO-LIVE.md) Phase 2 for creating the email service. |
 | `ACS_SENDER` | Verified sender address from your provisioned email domain, e.g. `DoNotReply@<your-domain>.azurecomm.net`. **Required for email sign-in.** |
 | `CLINIC_TIMEZONE` | Optional, defaults to `America/Phoenix`. Defines the clinic's calendar day — kiosks may only read/write rosters for the current day (±1) in this timezone. |
+| `REPORT_EMAILS` | Comma-separated leadership recipients for scheduled metric reports and volume alerts (no client names ever appear in these emails). **Required for reports.** |
+| `REPORTS_TRIGGER_SECRET` | Long random string presented by the report scheduler (also a GitHub repo secret — see GO-LIVE.md Phase 8.5). **Required for scheduled reports.** |
+| `ALERT_DROP_PCT` | Optional, default 5 — steady 2-day attendance drop (%) that emails leadership a Volume Alert. |
+| `ALERT_CRITICAL_PCT` | Optional, default 10 — drop (%) above which the alert is marked CRITICAL. |
 
 Click **Apply**. Settings take effect within a minute; no redeploy needed.
 

@@ -1,0 +1,61 @@
+# Fires the report emails on a schedule by POSTing to /api/reports/send with
+# the shared trigger secret — SWA-managed Functions only support HTTP
+# triggers, so the "timer" lives here instead.
+#
+# Repo secrets required (the job skips cleanly when they are missing, so
+# forks never fail):
+#   SITE_URL               — e.g. https://<your-app>.azurestaticapps.net
+#   REPORTS_TRIGGER_SECRET — must match the app setting of the same name
+
+name: Scheduled reports
+
+on:
+  schedule:
+    # 02:15 UTC ≈ 7:15pm America/Phoenix (no DST) — after the clinic day ends.
+    - cron: '15 2 * * *'
+  workflow_dispatch:
+    inputs:
+      period:
+        description: 'Report period to send (daily, weekly, monthly, quarterly)'
+        required: false
+        default: 'daily'
+        type: choice
+        options: [daily, weekly, monthly, quarterly]
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send reports
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          SECRET: ${{ secrets.REPORTS_TRIGGER_SECRET }}
+          INPUT_PERIOD: ${{ inputs.period }}
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$SECRET" ]; then
+            echo "::notice::SITE_URL / REPORTS_TRIGGER_SECRET secrets are not configured — skipping scheduled reports."
+            exit 0
+          fi
+          if [ -n "$INPUT_PERIOD" ]; then
+            # Manual run: send exactly the period that was asked for.
+            periods="$INPUT_PERIOD"
+          else
+            # Scheduled run: always daily; Mondays add weekly; the 1st of the
+            # month adds monthly; Jan/Apr/Jul/Oct 1st adds quarterly.
+            periods="daily"
+            [ "$(date -u +%u)" = "1" ] && periods="$periods weekly"
+            if [ "$(date -u +%d)" = "01" ]; then
+              periods="$periods monthly"
+              case "$(date -u +%m)" in
+                01|04|07|10) periods="$periods quarterly" ;;
+              esac
+            fi
+          fi
+          for p in $periods; do
+            echo "Sending $p report"
+            curl -fsS -X POST "$SITE_URL/api/reports/send" \
+              -H "x-reports-secret: $SECRET" \
+              -H 'content-type: application/json' \
+              -d "{\"period\":\"$p\"}"
+            echo
+          done

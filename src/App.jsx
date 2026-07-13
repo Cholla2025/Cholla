@@ -3,9 +3,11 @@ import logoUrl from '../Blue Agave Logo.png'
 import { useCheckIn } from './store'
 import { canAccess } from './lib/backend'
 import Kiosk from './screens/Kiosk'
+import DoorKiosk from './screens/DoorKiosk'
 import Staff from './screens/Staff'
 import Leader from './screens/Leader'
 import Settings from './screens/Settings'
+import AdminPortal from './screens/AdminPortal'
 import SignIn from './screens/SignIn'
 
 // Client check-in is for phones/tablets; the dashboards are desktop-only. We
@@ -15,17 +17,23 @@ import SignIn from './screens/SignIn'
 // door stays a kiosk even though it's wider than the breakpoint.
 const DESKTOP_QUERY = '(min-width: 900px)'
 const KIOSK_PIN_KEY = 'cholla-kiosk-pin'
+const DOOR_PIN_KEY = 'cholla-door-pin'
 
-function readKioskPin() {
+function readPin(key, param) {
   try {
-    const q = new URLSearchParams(window.location.search).get('kiosk')
-    if (q === '1' || q === 'true') localStorage.setItem(KIOSK_PIN_KEY, '1')
-    else if (q === '0' || q === 'false') localStorage.removeItem(KIOSK_PIN_KEY)
-    return localStorage.getItem(KIOSK_PIN_KEY) === '1'
+    const q = new URLSearchParams(window.location.search).get(param)
+    if (q === '1' || q === 'true') localStorage.setItem(key, '1')
+    else if (q === '0' || q === 'false') localStorage.removeItem(key)
+    return localStorage.getItem(key) === '1'
   } catch {
     return false
   }
 }
+
+// ?kiosk=1 pins a device to the group check-in kiosk; ?door=1 pins it to the
+// front-door check-in (a door device is always a kiosk device too).
+function readKioskPin() { return readPin(KIOSK_PIN_KEY, 'kiosk') }
+function readDoorPin() { return readPin(DOOR_PIN_KEY, 'door') }
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(
@@ -44,11 +52,13 @@ const ALL_TABS = [
   { key: 'staff', label: 'Facilitator Dashboard', go: 'goStaff' },
   { key: 'leader', label: 'Leadership', go: 'goLeader' },
   { key: 'settings', label: 'Settings', go: 'goSettings' },
+  { key: 'adminportal', label: 'Admin', go: 'goAdmin' },
 ]
 const DESK_HINTS = {
   staff: 'Authenticated · live session roster',
   leader: 'Authenticated · roll-up & day-of settings',
   settings: 'Authenticated · profile, team & access',
+  adminportal: 'Administrator · global controls',
 }
 
 function Footer() {
@@ -84,7 +94,8 @@ export default function App() {
   const { state: st, actions: a } = store
   const isDesktop = useIsDesktop()
   const [kioskPinned] = useState(readKioskPin)
-  const kioskDevice = !isDesktop || kioskPinned
+  const [doorPinned] = useState(readDoorPin)
+  const kioskDevice = !isDesktop || kioskPinned || doorPinned
 
   // Keep the active surface valid for the current device.
   useEffect(() => {
@@ -99,9 +110,9 @@ export default function App() {
       <div className="app app--mobile">
         <div className="kiosk-header">
           <img src={logoUrl} alt="Cholla Behavioral Health" />
-          <div className="kiosk-eyebrow">Group Check-In Kiosk</div>
+          <div className="kiosk-eyebrow">{doorPinned ? 'Front-Door Check-In' : 'Group Check-In Kiosk'}</div>
         </div>
-        <Kiosk store={store} />
+        {doorPinned ? <DoorKiosk live={st.live} /> : <Kiosk store={store} />}
         <Footer />
       </div>
     )
@@ -136,7 +147,6 @@ export default function App() {
         </nav>
         <div className="desk-right">
           <span className="desk-hint">{DESK_HINTS[surface]}</span>
-          {!st.live && <button className="desk-reset" onClick={a.resetDemo}>Reset demo</button>}
           {st.live && <button className="desk-reset" onClick={a.signOutUser}>Sign out</button>}
         </div>
       </header>
@@ -146,6 +156,7 @@ export default function App() {
           {surface === 'staff' && <Staff store={store} />}
           {surface === 'leader' && <Leader store={store} />}
           {surface === 'settings' && <Settings store={store} />}
+          {surface === 'adminportal' && <AdminPortal store={store} />}
         </div>
         <Footer />
       </main>

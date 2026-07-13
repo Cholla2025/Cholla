@@ -4,6 +4,30 @@
     "FUNCTIONS_WORKER_RUNTIME": "node",
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "STORAGE_CONNECTION_STRING": "UseDevelopmentStorage=true",
-    "KIOSK_CODE": "0000"
+    "KIOSK_CODE": "0000",
+
+    "//SESSION_SECRET": "Signs email sign-in session tokens. Leave empty locally (a dev-only fallback is used); in Azure it MUST be a long random string or email sign-in stays disabled (503).",
+    "SESSION_SECRET": "",
+
+    "//ADMIN_EMAILS": "Comma-separated bootstrap admin addresses that can always sign in with an emailed code, even before any staff records exist.",
+    "ADMIN_EMAILS": "",
+
+    "//ACS_CONNECTION_STRING": "Azure Communication Services connection string used to send the sign-in code emails. Leave empty locally — request-code then returns the code as devCode instead of emailing it.",
+    "ACS_CONNECTION_STRING": "",
+
+    "//ACS_SENDER": "Verified ACS sender address, e.g. DoNotReply@<your-domain>.azurecomm.net.",
+    "ACS_SENDER": "",
+
+    "//REPORT_EMAILS": "Comma-separated recipients for the scheduled daily/weekly/monthly/quarterly report emails. Empty means POST /api/reports/send answers 400.",
+    "REPORT_EMAILS": "",
+
+    "//REPORTS_TRIGGER_SECRET": "Shared secret the GitHub Actions cron presents in the x-reports-secret header to fire POST /api/reports/send. Leave empty locally (the dev-only fallback is 'dev-secret'); in Azure it MUST be a long random string or the header path stays disabled (503).",
+    "REPORTS_TRIGGER_SECRET": "",
+
+    "//ALERT_DROP_PCT": "Volume alert: a group whose last-2-day average check-ins fall more than this percentage below the prior-2-day average (while declining steadily) triggers a warning. Default 5.",
+    "ALERT_DROP_PCT": "5",
+
+    "//ALERT_CRITICAL_PCT": "Volume alert: drops beyond this percentage escalate to critical. Default 10.",
+    "ALERT_CRITICAL_PCT": "10"
   }
 }

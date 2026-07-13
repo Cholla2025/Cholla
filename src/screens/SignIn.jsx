@@ -152,7 +152,7 @@ export default function SignIn({ store }) {
 
         {!st.live && (
           <div className="signin-sub" style={{ marginTop: 14 }}>
-            Demo build: no backend is connected, so the dashboards open automatically.
+            Preview build: no backend is connected, so the dashboards open automatically.
           </div>
         )}
       </div>

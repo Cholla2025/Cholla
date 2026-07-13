@@ -72,6 +72,13 @@ function isValidId(id) {
   return typeof id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id)
 }
 
+// Email shape check that ALSO rejects the four characters Table Storage
+// forbids in row keys (/ \ # ?) — staff row keys are lowercase emails, so an
+// address that passes here is always a legal rowKey.
+function isValidEmail(email) {
+  return typeof email === 'string' && email.length <= 120 && /^[^\s@/\\#?]+@[^\s@/\\#?]+\.[^\s@/\\#?]+$/.test(email)
+}
+
 // Validate + sanitize a roster rows array. Returns { rows } on success or
 // { error } describing the first problem found. Unknown properties are
 // dropped — only the five known fields are ever stored.
@@ -119,5 +126,6 @@ module.exports = {
   isValidN,
   isValidDate,
   isValidId,
+  isValidEmail,
   cleanRosterRows,
 }

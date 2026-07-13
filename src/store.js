@@ -2,8 +2,8 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import * as S from './seed'
 import * as B from './lib/backend'
 
-// Auth fields are kept separate from the demo state so "Reset demo" never logs
-// anyone out.
+// Auth fields are kept separate from the preview-data state so resetting it
+// never logs anyone out.
 function makeAuthState() {
   return { authReady: false, authUser: null, authRole: null, authName: '' }
 }
@@ -312,6 +312,7 @@ export function useCheckIn() {
   const goStaff = () => set({ surface: 'staff', screen: 'staff-dashboard' })
   const goLeader = () => set((s) => ({ surface: 'leader', screen: s.leaderGroupN ? 'leader-detail' : 'leader-overview' }))
   const goSettings = () => set({ surface: 'settings', screen: 'settings' })
+  const goAdmin = () => set({ surface: 'adminportal', screen: 'adminportal' })
   // Reset the demo roster state without disturbing sign-in, org, or live data.
   const resetDemo = () => {
     clearTimeout(timer.current)
@@ -456,7 +457,7 @@ export function useCheckIn() {
     getRoster, stats, groupClients,
     groupsFor, getGroup, facById, facLabelFor,
     actions: {
-      goKiosk, goStaff, goLeader, goSettings, resetDemo, signOutUser, adoptSession, saveProfile,
+      goKiosk, goStaff, goLeader, goSettings, goAdmin, resetDemo, signOutUser, adoptSession, saveProfile,
       addGroup, removeGroup, assignFacilitator, addFacilitator, removeFacilitator,
       padPressCode, setKSession, beginSession, beginSession2, setKMode, onMemberName, doCheck, nextMember, completeGroup,
       staffSetSession, onStaffGroup, toggleStaffView,

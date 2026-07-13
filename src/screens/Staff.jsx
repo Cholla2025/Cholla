@@ -1,10 +1,13 @@
+import { useState } from 'react'
 import * as S from '../seed'
 import { Seg, Chips, Kpi, Pill, ActionButton, Field, Empty } from '../ui'
+import FrontDoor from './FrontDoor'
 
 const STATUS_FILTERS = ['All', 'Checked In', 'Checked Out', 'Expected', 'Late', 'Absent']
 
 export default function Staff({ store }) {
   const { state: st, set, actions: a, getRoster, groupsFor, getGroup, facLabelFor } = store
+  const [area, setArea] = useState('Group roster')
   const groupOptions = groupsFor(st.staffSession)
   const g = st.staffGroup == null ? undefined : getGroup(st.staffSession, st.staffGroup)
   const inRange = S.rangeHasToday(st.staffFrom, st.staffTo)
@@ -40,6 +43,12 @@ export default function Staff({ store }) {
     <div className="scroll fade cholla-scroll">
       <div className="section-title">Facilitator dashboard</div>
       <div className="section-sub">{st.staffName} · {st.todayLabel}</div>
+
+      <div style={{ marginTop: 14, maxWidth: 380 }}>
+        <Seg options={['Group roster', 'Front door']} value={area} onChange={setArea} />
+      </div>
+
+      {area === 'Front door' ? <FrontDoor store={store} /> : (<>
 
       <div style={{ marginTop: 16 }}>
         <Seg options={S.SESSIONS} value={st.staffSession} onChange={a.staffSetSession} activeBg="#4C84C4" inactiveFg="#7A8AA3" />
@@ -123,6 +132,8 @@ export default function Staff({ store }) {
           </div>
         </>
       )}
+
+      </>)}
     </div>
   )
 }

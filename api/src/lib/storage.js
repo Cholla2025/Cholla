@@ -1,9 +1,14 @@
 // Azure Table Storage access, shared by all handlers.
 //
-// Two tables, auto-created on first use:
-//   org     — partitionKey 'group' | 'facilitator', rowKey = id
-//   rosters — partitionKey = date (YYYY-MM-DD), rowKey = '<session>-<n>',
-//             property `rows` = JSON string of the day's roster
+// Three tables, auto-created on first use:
+//   org       — partitionKey 'group' | 'facilitator', rowKey = id
+//               partitionKey 'staff', rowKey = lowercase email (sign-in accounts)
+//               partitionKey 'logincode', rowKey = lowercase email (hashed
+//               one-time sign-in codes, see functions/auth.js)
+//   rosters   — partitionKey = date (YYYY-MM-DD), rowKey = '<session>-<n>',
+//               property `rows` = JSON string of the day's roster
+//   frontdoor — partitionKey = date (YYYY-MM-DD), rowKey = 'door',
+//               property `rows` = JSON string of the day's front-door log
 //
 // Connection comes from the STORAGE_CONNECTION_STRING app setting, falling
 // back to AzureWebJobsStorage (already present on every Functions app).
@@ -12,6 +17,7 @@ const { TableClient, odata } = require('@azure/data-tables')
 
 const ORG_TABLE = 'org'
 const ROSTERS_TABLE = 'rosters'
+const FRONTDOOR_TABLE = 'frontdoor'
 
 const clients = {}
 const ensured = {}
@@ -50,6 +56,10 @@ function orgTable() {
 
 function rostersTable() {
   return table(ROSTERS_TABLE)
+}
+
+function frontdoorTable() {
+  return table(FRONTDOOR_TABLE)
 }
 
 // ----- entity <-> API shape mapping -----
@@ -103,6 +113,29 @@ function facilitatorToEntity(f) {
   }
 }
 
+// Staff accounts (email one-time-code sign-in). The rowKey is the lowercase
+// address so lookups are case-insensitive; `email` keeps the original casing
+// for display.
+function staffFromEntity(e) {
+  return {
+    email: e.email || e.rowKey,
+    name: e.name || '',
+    role: e.role,
+    active: e.active !== false,
+  }
+}
+
+function staffToEntity(s) {
+  return {
+    partitionKey: 'staff',
+    rowKey: s.email.toLowerCase(),
+    email: s.email,
+    name: s.name,
+    role: s.role,
+    active: s.active !== false,
+  }
+}
+
 // ----- queries -----
 
 async function listOrgEntities() {
@@ -135,6 +168,22 @@ async function getEntity(partitionKey, rowKey) {
   }
 }
 
+// The staff entity for an address (any casing), or null.
+async function getStaffByEmail(email) {
+  if (typeof email !== 'string' || !email) return null
+  return getEntity('staff', email.toLowerCase())
+}
+
+async function listStaff() {
+  const client = await orgTable()
+  const out = []
+  const iter = client.listEntities({
+    queryOptions: { filter: odata`PartitionKey eq 'staff'` },
+  })
+  for await (const e of iter) out.push(e)
+  return out
+}
+
 async function listGroupsByFacilitator(facilitatorId) {
   const client = await orgTable()
   const out = []
@@ -148,14 +197,20 @@ async function listGroupsByFacilitator(facilitatorId) {
 module.exports = {
   ORG_TABLE,
   ROSTERS_TABLE,
+  FRONTDOOR_TABLE,
   orgTable,
   rostersTable,
+  frontdoorTable,
   groupFromEntity,
   groupToEntity,
   facilitatorFromEntity,
   facilitatorToEntity,
+  staffFromEntity,
+  staffToEntity,
   listOrgEntities,
   findGroupBySessionN,
   getEntity,
+  getStaffByEmail,
+  listStaff,
   listGroupsByFacilitator,
 }

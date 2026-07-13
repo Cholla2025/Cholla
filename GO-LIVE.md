@@ -265,10 +265,14 @@ Copy the output — that's your `SESSION_SECRET`.
 | `AZURE_CLIENT_ID` | Application (client) ID from Phase 3.4 | **Required** for Microsoft sign-in |
 | `AZURE_CLIENT_SECRET` | Client secret value from Phase 3.5 | **Required** for Microsoft sign-in |
 | `SESSION_SECRET` | The `openssl rand -base64 48` output above (any random string of 32+ chars works). Signs email-code sessions. | **Required** for email sign-in |
-| `ADMIN_EMAILS` | Comma-separated bootstrap admin emails, owner first — e.g. `brian@manageai.io`. This is how the FIRST admin gets in before any staff accounts exist. Match the address exactly as you'll type it at sign-in. | **Required** |
+| `ADMIN_EMAILS` | Comma-separated bootstrap admin emails, owner first — e.g. `brian@manageai.io`. This is how the FIRST admin gets in before any staff accounts exist. Matching is case-insensitive; just avoid typos and stray spaces. | **Required** |
 | `ACS_CONNECTION_STRING` | Communication Services connection string from Phase 2.5 | **Required** for email sign-in |
 | `ACS_SENDER` | The verified sender address from Phase 2.3, e.g. `DoNotReply@<your-domain>.azurecomm.net` — copy it exactly | **Required** for email sign-in |
 | `CLINIC_TIMEZONE` | Optional; defaults to `America/Phoenix`. Defines the clinic's calendar day for kiosk roster access. | Optional |
+| `REPORT_EMAILS` | Comma-separated leadership recipients for scheduled reports and volume alerts (Phase 8.5). | **Required** for reports |
+| `REPORTS_TRIGGER_SECRET` | Long random string the report scheduler presents (`openssl rand -base64 32`) — also stored as a GitHub repo secret in Phase 8.5. | **Required** for scheduled reports |
+| `ALERT_DROP_PCT` | Steady 2-day attendance drop (%) that triggers a Volume Alert. | Optional (default 5) |
+| `ALERT_CRITICAL_PCT` | Drop (%) above which the alert is marked CRITICAL. | Optional (default 10) |
 
 - [ ] All eight required settings added, values pasted with no stray
   spaces or quotes, **Apply** clicked.
@@ -310,7 +314,9 @@ If the code email never arrives, jump to [Troubleshooting](#troubleshooting).
 
 ### 6b — Add every staff member (the primary way)
 
-In the app: **Settings → Admin** → add an account per person:
+In the app: the **Admin** tab (the global admin portal — admins only) →
+**Access**, or equivalently **Settings → Sign-in accounts**. Add an
+account per person:
 
 1. [ ] **Email** — their work email, spelled exactly.
 2. [ ] **Display name** — what colleagues see.
@@ -399,6 +405,10 @@ Per tablet, about 5 minutes:
 1. [ ] Open `https://<your-site>/?kiosk=1` in the tablet's browser. This
    pins the device to kiosk mode (persists in localStorage across reloads
    and restarts; `?kiosk=0` unpins).
+   - **Front-door tablet**: use `https://<your-site>/?door=1` instead —
+     that pins the device to the facility entrance check-in (clients check
+     in/out with just their name; same day code unlocks it; `?door=0`
+     unpins). Everything else in this phase applies identically.
 2. [ ] Add it to the home screen so it launches full-screen — Safari:
    Share → **Add to Home Screen**; Chrome: ⋮ → **Add to Home screen**.
 3. [ ] Lock the tablet to the app:
@@ -417,6 +427,34 @@ Per tablet, about 5 minutes:
    if a device goes missing.
 6. [ ] Angle the screen away from the waiting area. The kiosk deliberately
    shows only the current check-in flow, never full rosters.
+
+---
+
+## Phase 8.5 — Automated reports & volume alerts (optional, 10 min)
+
+Daily/weekly/monthly/quarterly metric emails and the volume-alert watch.
+Reports contain **counts and group trends only — never client names**, so
+they are safe for ordinary leadership inboxes.
+
+1. [ ] App settings (same blade as Phase 5): set `REPORT_EMAILS` to the
+   comma-separated leadership recipients, and `REPORTS_TRIGGER_SECRET` to a
+   long random string (`openssl rand -base64 32`). Optional tuning:
+   `ALERT_DROP_PCT` (default 5) and `ALERT_CRITICAL_PCT` (default 10).
+2. [ ] GitHub repo → **Settings → Secrets and variables → Actions**: add
+   `SITE_URL` (e.g. `https://<your-site>.azurestaticapps.net`) and
+   `REPORTS_TRIGGER_SECRET` (same value as the app setting). The
+   **Scheduled reports** workflow then fires daily at ~7:15 PM Phoenix,
+   adding the weekly report on Mondays, monthly on the 1st, and quarterly
+   each Jan/Apr/Jul/Oct — until both secrets exist it no-ops harmlessly.
+3. [ ] How the volume alert works: every daily run compares each group's
+   average attendance over the last 2 clinic days against the 2 before. A
+   steady decline of more than **5%** emails leadership a Volume Alert;
+   more than **10%** marks it **CRITICAL** in the subject and banner.
+   Groups averaging fewer than 3 people are skipped so tiny groups don't
+   trigger noise.
+4. [ ] Try it before the schedule does: sign in as admin → **Admin** tab →
+   **Reports** → *Preview* shows the exact email; *Send now* delivers it
+   to the configured recipients immediately.
 
 ---
 
@@ -496,7 +534,11 @@ The consolidated, printable version. Done in order, you are live.
 - [ ] Cross-device check-in verified
 - [ ] Profile display-name edit persists
 - [ ] All fictional test rows deleted from `rosters`
-- [ ] Tablets pinned (`?kiosk=1` + Guided Access / App pinning)
+- [ ] Tablets pinned (`?kiosk=1` for group rooms, `?door=1` for the front
+  door, + Guided Access / App pinning)
+- [ ] Reports: `REPORT_EMAILS` + `REPORTS_TRIGGER_SECRET` app settings set;
+  `SITE_URL` + `REPORTS_TRIGGER_SECRET` GitHub secrets added; test send
+  from Admin → Reports → **Send now** received by leadership
 - [ ] Day code shared with facilitators; weekly rotation reminder set
 - [ ] Client-secret expiry reminder set
 - [ ] Secrets stored in a password manager; scratch notes destroyed
@@ -512,7 +554,7 @@ The consolidated, printable version. Done in order, you are live.
 | **Sign-in code email never arrives** | Work down this list: (1) check spam/junk — sender is `DoNotReply@...azurecomm.net`; (2) the email must exist as an **active** staff account or be in `ADMIN_EMAILS` — non-matching addresses are silently ignored by design; (3) `ACS_SENDER` must exactly match the MailFrom address of the provisioned domain; (4) the domain must be **connected** to the ACS resource (ACS → Email → Domains — is it listed?); (5) `ACS_CONNECTION_STRING` present and unexpired; (6) rate limit — wait a few minutes and request once. |
 | Email sign-in returns **503 "email sign-in not configured"** | `SESSION_SECRET`, `ACS_CONNECTION_STRING`, or `ACS_SENDER` missing from app settings. Add, **Apply**, retry. |
 | "**Account deactivated**" at sign-in | The staff account was deactivated in Settings → Admin. An admin can reactivate it there. |
-| **Admin can't get in** (bootstrap) | `ADMIN_EMAILS` typo or casing/whitespace mismatch with the address being typed at sign-in. Fix the app setting (comma-separated, no stray spaces), **Apply**, request a fresh code. |
+| **Admin can't get in** (bootstrap) | `ADMIN_EMAILS` typo or whitespace mismatch with the address being typed at sign-in (matching ignores upper/lower case). Fix the app setting (comma-separated, no stray spaces), **Apply**, request a fresh code. |
 | Code rejected | Codes expire in 10 minutes and allow 5 attempts — request a fresh one. Repeated requests are rate-limited; wait briefly. |
 | **Microsoft sign-in works but "access pending"** | The Microsoft account's email has no matching **active staff account** (Settings → Admin) AND no SWA Role-management invitation. Add one or the other — the email on the staff account must match the Microsoft account's email. |
 | Microsoft sign-in loops or `AADSTS…` errors | Redirect URI missing/wrong (must end `/.auth/login/aad/callback`), `<YOUR-TENANT-ID>` not replaced in `staticwebapp.config.json`, or `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET` missing/expired. |

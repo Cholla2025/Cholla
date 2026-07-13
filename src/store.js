@@ -2,8 +2,8 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import * as S from './seed'
 import * as B from './lib/backend'
 
-// Auth fields are kept separate from the demo state so "Reset demo" never logs
-// anyone out.
+// Auth fields are kept separate from the preview-data state so resetting it
+// never logs anyone out.
 function makeAuthState() {
   return { authReady: false, authUser: null, authRole: null, authName: '' }
 }

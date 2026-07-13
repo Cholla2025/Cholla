@@ -147,7 +147,6 @@ export default function App() {
         </nav>
         <div className="desk-right">
           <span className="desk-hint">{DESK_HINTS[surface]}</span>
-          {!st.live && <button className="desk-reset" onClick={a.resetDemo}>Reset demo</button>}
           {st.live && <button className="desk-reset" onClick={a.signOutUser}>Sign out</button>}
         </div>
       </header>

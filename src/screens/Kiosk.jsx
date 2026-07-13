@@ -72,7 +72,7 @@ function Start({ st, set, a, groupsFor, getGroup }) {
         disabled={!begin} onClick={a.beginSession}>
         {st.kBusy ? 'Verifying…' : 'Begin session'}
       </button>
-      {!st.live && <div className="muted" style={{ textAlign: 'center', font: '500 12px Inter', marginTop: 12 }}>Demo facilitator code: 0 0 0 0</div>}
+      {!st.live && <div className="muted" style={{ textAlign: 'center', font: '500 12px Inter', marginTop: 12 }}>Preview facilitator code: 0 0 0 0</div>}
     </div>
   )
 }

@@ -185,7 +185,7 @@ export default function DoorKiosk({ live }) {
         disabled={!begin} onClick={unlock}>
         {busy ? 'Verifying…' : 'Open front-door check-in'}
       </button>
-      {!live && <div className="muted" style={{ textAlign: 'center', font: '500 12px Inter', marginTop: 12 }}>Demo facilitator code: 0 0 0 0</div>}
+      {!live && <div className="muted" style={{ textAlign: 'center', font: '500 12px Inter', marginTop: 12 }}>Preview facilitator code: 0 0 0 0</div>}
     </div>
   )
 }

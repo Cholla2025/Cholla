@@ -80,7 +80,7 @@ function Profile({ store }) {
         <div>
           <div className="roster-name">Session</div>
           <div className="roster-meta">
-            <span>{st.authUser?.provider === 'aad' ? 'Microsoft sign-in' : st.authUser?.provider === 'email' ? 'Email-code sign-in (12-hour session)' : 'Demo session'}</span>
+            <span>{st.authUser?.provider === 'aad' ? 'Microsoft sign-in' : st.authUser?.provider === 'email' ? 'Email-code sign-in (12-hour session)' : 'Preview session'}</span>
             {msg && <span style={{ color: msg === 'Saved' ? '#1F7A56' : '#B14233' }}>{msg}</span>}
           </div>
         </div>

@@ -1,20 +1,25 @@
 import { useState } from 'react'
 import * as S from '../seed'
 import { Seg, Chips, Kpi, Pill, Badge, ActionButton, Field, Empty } from '../ui'
+import FrontDoor from './FrontDoor'
+
+const LEADER_VIEWS = { Overview: 'overview', 'Front door': 'door', 'Day-of settings': 'settings' }
 
 export default function Leader({ store }) {
   const { state: st, actions: a } = store
   if (st.screen === 'leader-detail' && st.leaderGroupN) return <Detail store={store} />
+  const viewLabel = Object.keys(LEADER_VIEWS).find((k) => LEADER_VIEWS[k] === st.leaderView) || 'Overview'
   return (
     <div className="scroll fade cholla-scroll">
       <div className="section-title">Leadership overview</div>
       <div className="section-sub">{st.leaderName} · {st.todayLabel}</div>
-      <div style={{ marginTop: 14, maxWidth: 380 }}>
-        <Seg options={['Overview', 'Day-of settings']}
-          value={st.leaderView === 'settings' ? 'Day-of settings' : 'Overview'}
-          onChange={(o) => a.setLeaderView(o === 'Day-of settings' ? 'settings' : 'overview')} />
+      <div style={{ marginTop: 14, maxWidth: 520 }}>
+        <Seg options={Object.keys(LEADER_VIEWS)} value={viewLabel}
+          onChange={(o) => a.setLeaderView(LEADER_VIEWS[o])} />
       </div>
-      {st.leaderView === 'settings' ? <OrgSettings store={store} /> : <Overview store={store} />}
+      {st.leaderView === 'settings' ? <OrgSettings store={store} />
+        : st.leaderView === 'door' ? <FrontDoor store={store} />
+        : <Overview store={store} />}
     </div>
   )
 }

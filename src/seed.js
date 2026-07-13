@@ -185,8 +185,27 @@ export function pillColors(status) {
     'Expected': ['#DCE8F6', '#2C5C94'],
     'Late': ['#FBEEDD', '#B5742A'],
     'Absent': ['#F7E3E0', '#B14233'],
+    'In Facility': ['#E3F3EC', '#1F7A56'],
+    'Departed': ['#E8ECF3', '#3A4A66'],
   }
   return M[status] || ['#eee', '#333']
+}
+
+// Demo front-door log — fictional walk-ins for the facility panel and door
+// kiosk when no backend is connected.
+export function defaultDoor() {
+  const names = ['Sofia Delgado', 'Aaron Pike', 'Renee Coleman', 'Victor Hahn', 'Bianca Ford', 'Miles Archer']
+  return names.map((name, i) => {
+    const inMin = 8 * 60 + 22 + i * 19
+    const out = i < 2 ? fmtClock(inMin + 190) : null
+    return {
+      id: 'd' + (100 + i),
+      name,
+      in: fmtClock(inMin),
+      out,
+      status: out ? 'Departed' : 'In Facility',
+    }
+  })
 }
 export function badgeColors(status) {
   const M = {

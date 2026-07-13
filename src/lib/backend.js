@@ -272,3 +272,28 @@ export async function saveRoster(session, n, date, rows) {
   if (!live) return
   await api('/rosters', { method: 'PUT', body: JSON.stringify({ session, n, date, rows }) })
 }
+
+// ---------------------------------------------------------------------------
+// Front-door log — who is in the facility. A separate table from the group
+// rosters; date-keyed, so the list starts fresh every clinic day. Access
+// mirrors rosters: staff any date, unlocked kiosk today only.
+// ---------------------------------------------------------------------------
+
+export async function fetchDoorRows(date) {
+  if (!live) return null
+  try {
+    const out = await api('/frontdoor?date=' + encodeURIComponent(date))
+    return out && Array.isArray(out.rows) ? out.rows : []
+  } catch (err) {
+    console.warn('[cholla] could not load front-door log:', err.message)
+    return null
+  }
+}
+
+// Merge ONE front-door row (same conflict-safe merge as rosters). Throws on
+// failure so the door kiosk never shows a false welcome.
+export async function saveDoorRow(date, row) {
+  if (!live) return null
+  const out = await api('/frontdoor/row', { method: 'POST', body: JSON.stringify({ date, row }) })
+  return out && Array.isArray(out.rows) ? out.rows : null
+}

@@ -6,3 +6,7 @@ dist
 .DS_Store
 *.log
 .vercel
+.azure
+api/local.settings.json
+swa-cli.config.json
+.azurite

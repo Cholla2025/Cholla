@@ -1,36 +1,41 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import * as S from './seed'
-import { fetchOverrides, saveRoster, supabaseEnabled } from './lib/data'
-import { getCurrentUser, fetchProfile, sendToken, verifyToken, signOut, onAuthChange } from './lib/auth'
+import * as B from './lib/backend'
 
 // Auth fields are kept separate from the demo state so "Reset demo" never logs
 // anyone out.
 function makeAuthState() {
-  return {
-    authReady: false, authUser: null, authRole: null, authName: '',
-    authEmail: '', authToken: '', authStep: 'email', authBusy: false,
-    authErr: '', authSent: false,
-  }
+  return { authReady: false, authUser: null, authRole: null, authName: '' }
 }
 
 function makeInitialState() {
+  const today = S.todayISO()
   return {
+    live: false,
     surface: 'kiosk', screen: 'kiosk-start',
-    staffAuthed: false, leaderAuthed: false,
+    today, todayLabel: S.todayLabel(),
     demoMin: 13 * 60 + 47,
-    kSession: 'Afternoon', kGroup: 3, kCode: '', kCodeErr: '',
+    org: S.defaultOrg(), orgBusy: false, orgErr: '',
+    rosterErr: '',
+    kSession: S.currentSession(), kGroup: null, kCode: '', kCodeErr: '', kBusy: false,
+    kUnlocked: false, kSaving: false, kErr: '',
     kMode: 'in', kEntry: '', confirm: null,
-    staffEmail: 'd.alvarez@chollabh.org', staffMfa: '', staffName: 'Dana Alvarez, LISAC',
-    staffGroup: 3, staffSession: 'Afternoon', staffFrom: S.TODAY, staffTo: S.TODAY,
+    staffName: 'Dana Alvarez, LISAC',
+    staffGroup: 1, staffSession: S.currentSession(), staffFrom: today, staffTo: today,
     staffStatus: 'All', staffSearch: '', staffView: 'live',
-    leaderEmail: 'r.okafor@chollabh.org', leaderMfa: '', leaderName: 'Ruth Okafor, Clinical Director',
-    leaderSessionF: 'All', leaderFac: 'All', leaderStatusF: 'All', leaderFrom: S.TODAY, leaderTo: S.TODAY,
-    leaderSearch: '', leaderGroupSession: null, leaderGroupN: null,
+    leaderName: 'Ruth Okafor, Clinical Director',
+    leaderSessionF: 'All', leaderFac: 'All', leaderStatusF: 'All', leaderFrom: today, leaderTo: today,
+    leaderSearch: '', leaderGroupSession: null, leaderGroupN: null, leaderView: 'overview',
     detailStatus: 'All', detailSearch: '',
     newName: '', newId: '',
-    rosters: { 'Afternoon-3': S.initialRoster() },
+    rosters: {},
     ...makeAuthState(),
   }
+}
+
+function sortGroups(groups) {
+  return groups.slice().sort((a, b) =>
+    a.session === b.session ? a.n - b.n : S.SESSIONS.indexOf(a.session) - S.SESSIONS.indexOf(b.session))
 }
 
 export function useCheckIn() {
@@ -48,104 +53,235 @@ export function useCheckIn() {
     })
   }, [])
 
-  // Load any persisted rosters for today from Supabase (if configured).
+  // ----- org helpers -----
+  const groupsFor = (session) => ref.current.org.groups.filter((g) => g.session === session).sort((a, b) => a.n - b.n)
+  const getGroup = (session, n) => ref.current.org.groups.find((g) => g.session === session && g.n === Number(n))
+  const facById = (id) => ref.current.org.facilitators.find((f) => f.id === id)
+  const facLabelFor = (g) => S.facLabel(g && facById(g.facilitatorId))
+
+  // Keep the staff dashboard's selected group pointing at a group that still
+  // exists in the (possibly just-loaded, possibly just-edited) org.
+  const reconcileStaffGroup = (org, session, current) => {
+    const inSession = org.groups.filter((g) => g.session === session).sort((a, b) => a.n - b.n)
+    if (inSession.some((g) => g.n === Number(current))) return current
+    return inSession[0] ? inSession[0].n : null
+  }
+
+  // ----- startup: probe the Azure backend, then load identity + org + today's
+  // rosters. With no backend reachable everything stays on demo defaults.
   useEffect(() => {
-    if (!supabaseEnabled) return
     let alive = true
-    fetchOverrides(S.TODAY).then((overrides) => {
-      if (alive && overrides && Object.keys(overrides).length) {
-        set((prev) => ({ rosters: { ...prev.rosters, ...overrides } }))
+    ;(async () => {
+      const live = await B.initBackend()
+      let org = null
+      let rosters = {}
+      if (live) {
+        org = await B.fetchOrg().catch(() => null)
+        rosters = await B.fetchRosters(S.todayISO())
       }
-    })
+      const user = await B.getUser()
+      if (!alive) return
+      const d = new Date()
+      set((prev) => {
+        const nextOrg = org && Array.isArray(org.groups)
+          ? { groups: sortGroups(org.groups), facilitators: org.facilitators || [] }
+          : prev.org
+        return {
+          live,
+          org: nextOrg,
+          rosters: { ...prev.rosters, ...rosters },
+          demoMin: live ? d.getHours() * 60 + d.getMinutes() : prev.demoMin,
+          staffGroup: reconcileStaffGroup(nextOrg, prev.staffSession, prev.staffGroup),
+          authReady: true,
+          authUser: user ? { id: user.id, email: user.email } : null,
+          authRole: user ? user.role : null,
+          authName: user ? user.name : '',
+          staffName: user?.name || prev.staffName,
+          leaderName: user?.name || prev.leaderName,
+        }
+      })
+    })()
     return () => { alive = false }
   }, [set])
 
-  // ----- auth -----
-  // Resolve a signed-in user into role + display name (or clear when signed out).
-  const applyUser = useCallback(async (user) => {
-    if (!user) { set({ authUser: null, authRole: null, authName: '', authReady: true }); return }
-    const profile = await fetchProfile(user.id)
-    const role = profile?.role || 'facilitator'
-    const name = profile?.full_name || user.email || ''
-    set((prev) => ({
-      authUser: { id: user.id, email: user.email }, authRole: role, authName: name,
-      authReady: true, authErr: '', authToken: '', authStep: 'email', authSent: false,
-      staffName: name || prev.staffName, leaderName: name || prev.leaderName,
-    }))
+  // ----- keep long-lived pages honest -----
+  // A kiosk tablet stays open for days. Every minute (and whenever the tab
+  // regains focus) in live mode: re-pull today's rosters so other devices'
+  // check-ins appear, and roll the app over when the date changes so
+  // check-ins never land on yesterday's roster.
+  useEffect(() => {
+    const refresh = async () => {
+      const s = ref.current
+      const today = S.todayISO()
+      if (today !== s.today) {
+        set((prev) => ({
+          today,
+          todayLabel: S.todayLabel(),
+          rosters: {},
+          staffFrom: prev.staffFrom === prev.today ? today : prev.staffFrom,
+          staffTo: prev.staffTo === prev.today ? today : prev.staffTo,
+          leaderFrom: prev.leaderFrom === prev.today ? today : prev.leaderFrom,
+          leaderTo: prev.leaderTo === prev.today ? today : prev.leaderTo,
+        }))
+      }
+      if (!s.live) return
+      const canRead = s.authUser || s.kUnlocked
+      if (!canRead) return
+      const rosters = await B.fetchRosters(today)
+      set((prev) => ({ rosters: { ...prev.rosters, ...rosters } }))
+    }
+    const iv = setInterval(refresh, 60 * 1000)
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVisible) }
   }, [set])
 
-  useEffect(() => {
-    let unsub = () => {}
-    if (!supabaseEnabled) {
-      // No backend configured: run as a demo admin so the dashboards are usable.
-      set({ authReady: true, authUser: { id: 'demo' }, authRole: 'admin', authName: 'Demo Admin' })
-      return
-    }
-    getCurrentUser().then(applyUser)
-    unsub = onAuthChange((user) => applyUser(user))
-    return () => unsub()
-  }, [applyUser, set])
+  const signOutUser = () => {
+    if (ref.current.live) window.location.href = B.logoutUrl()
+    // Demo mode has no real session to end.
+  }
 
-  const setAuthEmail = (e) => set({ authEmail: e.target.value, authErr: '' })
-  const setAuthToken = (e) => set({ authToken: e.target.value.replace(/\D/g, '').slice(0, 8), authErr: '' })
-  const backToEmail = () => set({ authStep: 'email', authToken: '', authErr: '', authSent: false })
-  const sendAuthToken = async () => {
-    const email = ref.current.authEmail.trim()
-    if (!email.includes('@')) { set({ authErr: 'Enter a valid work email' }); return }
-    set({ authBusy: true, authErr: '' })
-    const { error } = await sendToken(email)
-    if (error) set({ authBusy: false, authErr: error.message || 'Could not send a code to that email' })
-    else set({ authBusy: false, authSent: true, authStep: 'token' })
+  // ----- org management (Leadership → Day-of settings) -----
+  const orgRun = async (fn) => {
+    set({ orgBusy: true, orgErr: '' })
+    try {
+      await fn()
+      set({ orgBusy: false })
+      return true
+    } catch (err) {
+      set({ orgBusy: false, orgErr: err.message || 'Action failed' })
+      return false
+    }
   }
-  const verifyAuthToken = async () => {
-    const { authEmail, authToken } = ref.current
-    if (authToken.length < 6) { set({ authErr: 'Enter the code from your email' }); return }
-    set({ authBusy: true, authErr: '' })
-    const { user, error } = await verifyToken(authEmail, authToken)
-    if (error || !user) set({ authBusy: false, authErr: error?.message || 'That code did not match' })
-    else { set({ authBusy: false }); await applyUser(user) }
-  }
-  const signOutUser = async () => { await signOut(); set({ ...makeAuthState(), authReady: true, surface: 'kiosk' }) }
+
+  const addGroup = ({ session, n, name, facilitatorId }) => orgRun(async () => {
+    const num = parseInt(n, 10)
+    if (!S.SESSIONS.includes(session)) throw new Error('Pick a session')
+    if (!num || num < 1) throw new Error('Group number is required')
+    if (ref.current.org.groups.some((g) => g.session === session && g.n === num)) {
+      throw new Error(session + ' Group ' + num + ' already exists')
+    }
+    const draft = {
+      id: session.toLowerCase() + '-' + num,
+      session, n: num,
+      name: (name || '').trim() || session + ' IOP',
+      facilitatorId: facilitatorId || null,
+    }
+    const out = await B.addGroup(draft)
+    const grp = (out && out.group) || draft
+    set((prev) => ({ org: { ...prev.org, groups: sortGroups([...prev.org.groups, grp]) } }))
+  })
+
+  const removeGroup = (id) => orgRun(async () => {
+    await B.removeGroup(id)
+    set((prev) => {
+      const org = { ...prev.org, groups: prev.org.groups.filter((g) => g.id !== id) }
+      return { org, staffGroup: reconcileStaffGroup(org, prev.staffSession, prev.staffGroup) }
+    })
+  })
+
+  const assignFacilitator = (groupId, facilitatorId) => orgRun(async () => {
+    await B.assignFacilitator(groupId, facilitatorId || null)
+    set((prev) => ({
+      org: {
+        ...prev.org,
+        groups: prev.org.groups.map((g) => (g.id === groupId ? { ...g, facilitatorId: facilitatorId || null } : g)),
+      },
+    }))
+  })
+
+  const addFacilitator = ({ name, credential, email }) => orgRun(async () => {
+    const nm = (name || '').trim()
+    if (nm.length < 2) throw new Error('Facilitator name is required')
+    const draft = { name: nm, credential: (credential || '').trim(), email: (email || '').trim(), active: true }
+    const out = await B.addFacilitator(draft)
+    const fac = (out && out.facilitator) || { ...draft, id: 'f-' + nm.toLowerCase().replace(/\W+/g, '-') }
+    set((prev) => ({ org: { ...prev.org, facilitators: [...prev.org.facilitators, fac] } }))
+  })
+
+  const removeFacilitator = (id) => orgRun(async () => {
+    await B.removeFacilitator(id)
+    set((prev) => ({
+      org: {
+        facilitators: prev.org.facilitators.filter((f) => f.id !== id),
+        groups: prev.org.groups.map((g) => (g.facilitatorId === id ? { ...g, facilitatorId: null } : g)),
+      },
+      // A filter pointing at a deleted facilitator would silently match nothing.
+      leaderFac: prev.leaderFac === id ? 'All' : prev.leaderFac,
+    }))
+  })
 
   // ----- roster helpers -----
+  // Live mode never invents clients: a group with no stored roster is empty.
   const curRoster = (g, rosters) => {
     const k = S.rosterKey(g)
-    return rosters[k] ? rosters[k] : S.defaultRoster(g)
+    if (rosters[k]) return rosters[k]
+    return ref.current.live ? [] : S.defaultRoster(g)
   }
   const getRoster = (g) => (g ? curRoster(g, ref.current.rosters) : [])
   const stats = (g) => S.statsOf(getRoster(g))
   const groupClients = (g) => getRoster(g).map((r) => r.name.toLowerCase())
 
-  const persist = (g, rows) => saveRoster(g.session, g.n, S.TODAY, rows)
+  // Current wall-clock in live mode; the advancing demo clock otherwise.
+  const tick = (jitter = 0) => {
+    const s = ref.current
+    if (s.live) {
+      const d = new Date()
+      return { t: S.fmtClock(d.getHours() * 60 + d.getMinutes()), demoMin: d.getHours() * 60 + d.getMinutes() }
+    }
+    const m = s.demoMin + 1 + jitter
+    return { t: S.fmtClock(m), demoMin: m }
+  }
 
-  const writeRoster = (g, rows, extra = {}) => {
+  const writeLocalRoster = (g, rows, extra = {}) => {
     const k = S.rosterKey(g)
     set((prev) => ({ rosters: { ...prev.rosters, [k]: rows }, ...extra }))
-    persist(g, rows)
+  }
+
+  // Persist ONE row through the server's merge endpoint, then adopt the
+  // server's copy (which may contain other devices' check-ins). On failure:
+  // surface the error and re-pull so the local view matches reality — never
+  // pretend an unsaved change was saved.
+  const syncRow = async (g, row) => {
+    if (!ref.current.live) return true
+    try {
+      const rows = await B.saveRosterRow(g.session, g.n, S.todayISO(), row)
+      if (rows) writeLocalRoster(g, rows)
+      return true
+    } catch (err) {
+      const rosters = await B.fetchRosters(S.todayISO())
+      set((prev) => ({
+        rosterErr: 'Could not save — ' + (err.message || 'check the connection and try again'),
+        rosters: { ...prev.rosters, ...rosters },
+      }))
+      return false
+    }
   }
 
   const mutateGroup = (g, matchFn, fn) => {
     if (!g) return
-    const s = ref.current
-    const cur = curRoster(g, s.rosters)
-    const t = S.fmtClock(s.demoMin + 1)
-    const next = cur.map((r) => (matchFn(r) ? fn(r, t) : r))
-    writeRoster(g, next, { demoMin: s.demoMin + 1 })
+    const { t, demoMin } = tick()
+    const cur = curRoster(g, ref.current.rosters)
+    let changed = null
+    const next = cur.map((r) => {
+      if (!matchFn(r)) return r
+      changed = fn(r, t)
+      return changed
+    })
+    writeLocalRoster(g, next, { demoMin, rosterErr: '' })
+    if (changed) syncRow(g, changed)
   }
 
   // ----- navigation ----- (access is gated at the app shell by role)
   const goKiosk = () => set((s) => ({ surface: 'kiosk', screen: s.screen.startsWith('kiosk') ? s.screen : 'kiosk-start' }))
   const goStaff = () => set({ surface: 'staff', screen: 'staff-dashboard' })
   const goLeader = () => set((s) => ({ surface: 'leader', screen: s.leaderGroupN ? 'leader-detail' : 'leader-overview' }))
-  const goAdmin = () => set({ surface: 'admin', screen: 'admin' })
-  // Reset the demo roster state without disturbing the signed-in session.
+  // Reset the demo roster state without disturbing sign-in, org, or live data.
   const resetDemo = () => {
     clearTimeout(timer.current)
-    const { authReady, authUser, authRole, authName } = ref.current
-    setState({ ...makeInitialState(), authReady, authUser, authRole, authName, surface: ref.current.surface, screen: ref.current.screen })
+    const { authReady, authUser, authRole, authName, live, org, surface, screen } = ref.current
+    setState({ ...makeInitialState(), authReady, authUser, authRole, authName, live, org, surface, screen })
   }
-  // Toggle a signed-in user between the Facilitator and Leadership dashboards.
-  const switchDash = (which) => (which === 'Leadership' ? goLeader() : goStaff())
 
   // ----- kiosk -----
   const padPressCode = (d) => set((s) => {
@@ -155,44 +291,75 @@ export function useCheckIn() {
     else if (c.length < 4) c = c + d
     return { kCode: c, kCodeErr: '' }
   })
-  const padPressEntry = (d) => set((s) => {
-    let c = s.kEntry
-    if (d === 'Clear') c = ''
-    else if (d === '⌫') c = c.slice(0, -1)
-    else if (c.length < 4) c = c + d
-    return { kEntry: c }
+  const setKSession = (o) => set((s) => {
+    const stays = ref.current.org.groups.some((g) => g.session === o && g.n === s.kGroup)
+    return { kSession: o, kGroup: stays ? s.kGroup : null }
   })
-  const beginSession = () => {
-    if (ref.current.kCode !== S.FACILITATOR_CODE) { set({ kCodeErr: 'Enter facilitator code 0000 to begin' }); return }
-    set({ screen: 'kiosk-member', kEntry: '', kMode: 'in' })
+  const beginSession = async () => {
+    const s = ref.current
+    if (!s.kGroup || !getGroup(s.kSession, s.kGroup)) { set({ kCodeErr: 'Select a group above to begin' }); return }
+    if (s.kCode.length !== 4 || s.kBusy) return
+    set({ kBusy: true, kCodeErr: '' })
+    const ok = await B.verifyKioskCode(s.kCode)
+    if (!ok) {
+      set({
+        kBusy: false, kCode: '',
+        kCodeErr: s.live ? 'That code didn’t match — check with the front office' : 'Enter facilitator code 0000 to begin',
+      })
+      return
+    }
+    B.setKioskCode(s.kCode)
+    if (s.live) {
+      // The kiosk is anonymous until unlocked; now it can read today's rosters.
+      const rosters = await B.fetchRosters(S.todayISO())
+      set((prev) => ({ rosters: { ...prev.rosters, ...rosters } }))
+    }
+    set({ kBusy: false, kUnlocked: true, screen: 'kiosk-member', kEntry: '', kErr: '', kMode: 'in' })
   }
-  const beginSession2 = () => set({ screen: 'kiosk-start', kCode: '', kCodeErr: '', kEntry: '', confirm: null })
-  const setKMode = (m) => set({ kMode: m === 'Check in' ? 'in' : 'out', kEntry: '' })
-  const onMemberName = (e) => set({ kEntry: e.target.value.replace(/[^A-Za-z .'-]/g, '').slice(0, 40) })
+  const beginSession2 = () => {
+    // Lock the kiosk again between sessions — the day code must be re-entered.
+    B.setKioskCode(null)
+    set({ screen: 'kiosk-start', kCode: '', kCodeErr: '', kEntry: '', kErr: '', kUnlocked: false, confirm: null })
+  }
+  const setKMode = (m) => set({ kMode: m === 'Check in' ? 'in' : 'out', kEntry: '', kErr: '' })
+  const onMemberName = (e) => set({ kEntry: e.target.value.replace(/[^A-Za-z .'-]/g, '').slice(0, 40), kErr: '' })
 
-  const doCheck = () => {
-    const { kEntry, kMode, kSession, kGroup, demoMin } = ref.current
-    const q = kEntry.trim()
-    if (q.length < 2) return
-    const g = S.group(kSession, kGroup)
-    const nm = demoMin + 1 + Math.floor(Math.random() * 2)
-    const t = S.fmtClock(nm)
-    const cur = curRoster(g, ref.current.rosters)
+  const doCheck = async () => {
+    const s = ref.current
+    const q = s.kEntry.trim()
+    if (q.length < 2 || s.kSaving) return
+    const g = getGroup(s.kSession, s.kGroup)
+    if (!g) return
+    const { t, demoMin } = tick(s.live ? 0 : Math.floor(Math.random() * 2))
+    const cur = curRoster(g, s.rosters)
     const i = cur.findIndex((r) => r.name.toLowerCase() === q.toLowerCase())
-    let next
+    let row
     if (i >= 0) {
-      next = cur.slice()
-      next[i] = kMode === 'in'
+      row = s.kMode === 'in'
         ? { ...cur[i], checkin: t, checkout: null, status: 'Checked In' }
         : { ...cur[i], checkout: t, status: 'Checked Out' }
     } else {
       const id = String(1800 + cur.length)
-      next = [...cur, kMode === 'in'
+      row = s.kMode === 'in'
         ? { id, name: S.titleCase(q), checkin: t, checkout: null, status: 'Checked In' }
-        : { id, name: S.titleCase(q), checkin: null, checkout: t, status: 'Checked Out' }]
+        : { id, name: S.titleCase(q), checkin: null, checkout: t, status: 'Checked Out' }
     }
-    const conf = { mode: kMode, name: S.titleCase(q), group: S.groupLabel(kSession, kGroup), time: t }
-    writeRoster(g, next, { demoMin: nm, confirm: conf, screen: 'kiosk-confirm', kEntry: '' })
+    const conf = { mode: s.kMode, name: S.titleCase(q), group: S.groupLabel(s.kSession, s.kGroup), time: t }
+
+    // Live mode: the confirmation screen is a promise to the client that their
+    // attendance was recorded — so it only shows after the server says yes.
+    if (s.live) {
+      set({ kSaving: true, kErr: '' })
+      const saved = await syncRow(g, row)
+      if (!saved) {
+        set({ kSaving: false, kErr: 'That didn’t save — please try again, or flag your facilitator', rosterErr: '' })
+        return
+      }
+      set({ kSaving: false, demoMin, confirm: conf, screen: 'kiosk-confirm', kEntry: '' })
+    } else {
+      const next = i >= 0 ? cur.map((r, idx) => (idx === i ? row : r)) : [...cur, row]
+      writeLocalRoster(g, next, { demoMin, confirm: conf, screen: 'kiosk-confirm', kEntry: '' })
+    }
     clearTimeout(timer.current)
     timer.current = setTimeout(() => {
       if (ref.current.screen === 'kiosk-confirm') set({ screen: 'kiosk-member', confirm: null })
@@ -201,13 +368,12 @@ export function useCheckIn() {
   const nextMember = () => { clearTimeout(timer.current); set({ screen: 'kiosk-member', confirm: null }) }
   const completeGroup = () => { clearTimeout(timer.current); set({ screen: 'kiosk-closeout' }) }
 
-  // ----- staff -----
-  const staffGroupObj = () => S.group(ref.current.staffSession, ref.current.staffGroup)
-  // Demo sign-in unlocks BOTH dashboards: every account can reach Facilitator
-  // and Leadership and toggle between them via the in-app switch.
-  const staffVerify = () => { const s = ref.current; if (s.staffMfa.length === 6 && s.staffEmail.includes('@')) set({ staffAuthed: true, leaderAuthed: true, screen: 'staff-dashboard' }) }
-  const onStaffMfa = (e) => set({ staffMfa: e.target.value.replace(/\D/g, '').slice(0, 6) })
-  const staffSetSession = (sv) => { const first = S.GROUPS.find((g) => g.session === sv); set({ staffSession: sv, staffGroup: first ? first.n : ref.current.staffGroup, staffView: 'live', staffStatus: 'All', staffSearch: '' }) }
+  // ----- staff (facilitator dashboard) -----
+  const staffGroupObj = () => getGroup(ref.current.staffSession, ref.current.staffGroup)
+  const staffSetSession = (sv) => {
+    const first = groupsFor(sv)[0]
+    set({ staffSession: sv, staffGroup: first ? first.n : null, staffView: 'live', staffStatus: 'All', staffSearch: '' })
+  }
   const onStaffGroup = (e) => set({ staffGroup: parseInt(e.target.value, 10), staffView: 'live', staffStatus: 'All', staffSearch: '' })
   const toggleStaffView = () => set((s) => ({ staffView: s.staffView === 'live' ? 'empty' : 'live' }))
 
@@ -215,40 +381,51 @@ export function useCheckIn() {
   const checkOutClient = (id) => mutateGroup(staffGroupObj(), (r) => r.id === id, (r, t) => ({ ...r, checkout: t, status: 'Checked Out' }))
   const markAbsent = (id) => mutateGroup(staffGroupObj(), (r) => r.id === id, (r) => ({ ...r, checkin: null, checkout: null, status: 'Absent' }))
 
-  const onNewName = (e) => set({ newName: e.target.value.replace(/[^A-Za-z .'-]/g, '').slice(0, 40) })
-  const onNewId = (e) => set({ newId: e.target.value.replace(/\D/g, '').slice(0, 6) })
+  const onNewName = (e) => set({ newName: e.target.value.replace(/[^A-Za-z .'-]/g, '').slice(0, 40), rosterErr: '' })
+  const onNewId = (e) => set({ newId: e.target.value.replace(/\D/g, '').slice(0, 6), rosterErr: '' })
   const addClient = (checkIn) => {
     const nm = S.titleCase(ref.current.newName)
     if (nm.length < 2) return
     const g = staffGroupObj()
-    const s = ref.current
-    const cur = curRoster(g, s.rosters)
-    const t = S.fmtClock(s.demoMin + 1)
-    const id = s.newId || String(1700 + cur.length)
+    if (!g) return
+    const { t, demoMin } = tick()
+    const cur = curRoster(g, ref.current.rosters)
+    let id = ref.current.newId
+    if (id && cur.some((r) => r.id === id)) {
+      set({ rosterErr: 'ID ' + id + ' is already on this roster — pick another or leave it blank' })
+      return
+    }
+    if (!id) {
+      // Generate an id that cannot collide with anything already on the list.
+      let candidate = 1700 + cur.length
+      while (cur.some((r) => String(r.id) === String(candidate))) candidate++
+      id = String(candidate)
+    }
     const row = checkIn
       ? { id, name: nm, checkin: t, checkout: null, status: 'Checked In' }
       : { id, name: nm, checkin: null, checkout: null, status: 'Expected' }
-    writeRoster(g, [...cur, row], { demoMin: s.demoMin + 1, newName: '', newId: '', staffView: 'live' })
+    writeLocalRoster(g, [...cur, row], { demoMin, newName: '', newId: '', staffView: 'live', rosterErr: '' })
+    syncRow(g, row)
   }
 
   // ----- leader -----
-  const leaderVerify = () => { const s = ref.current; if (s.leaderMfa.length === 6 && s.leaderEmail.includes('@')) set({ leaderAuthed: true, staffAuthed: true, screen: 'leader-overview' }) }
-  const onLeaderMfa = (e) => set({ leaderMfa: e.target.value.replace(/\D/g, '').slice(0, 6) })
   const openGroup = (session, n) => set({ leaderGroupSession: session, leaderGroupN: n, screen: 'leader-detail', detailStatus: 'All', detailSearch: '' })
   const backToOverview = () => set({ leaderGroupN: null, screen: 'leader-overview' })
+  const setLeaderView = (v) => set({ leaderView: v, leaderGroupN: null, screen: 'leader-overview', orgErr: '' })
 
   useEffect(() => () => clearTimeout(timer.current), [])
 
   return {
-    state, set, supabaseEnabled,
+    state, set,
     getRoster, stats, groupClients,
+    groupsFor, getGroup, facById, facLabelFor,
     actions: {
-      goKiosk, goStaff, goLeader, goAdmin, resetDemo, switchDash,
-      setAuthEmail, setAuthToken, sendAuthToken, verifyAuthToken, backToEmail, signOutUser,
-      padPressCode, padPressEntry, beginSession, beginSession2, setKMode, onMemberName, doCheck, nextMember, completeGroup,
-      staffVerify, onStaffMfa, staffSetSession, onStaffGroup, toggleStaffView,
+      goKiosk, goStaff, goLeader, resetDemo, signOutUser,
+      addGroup, removeGroup, assignFacilitator, addFacilitator, removeFacilitator,
+      padPressCode, setKSession, beginSession, beginSession2, setKMode, onMemberName, doCheck, nextMember, completeGroup,
+      staffSetSession, onStaffGroup, toggleStaffView,
       checkInClient, checkOutClient, markAbsent, onNewName, onNewId, addClient, staffGroupObj,
-      leaderVerify, onLeaderMfa, openGroup, backToOverview,
+      openGroup, backToOverview, setLeaderView,
     },
   }
 }

@@ -1,0 +1,14 @@
+{
+  "name": "cholla-checkin-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cholla Check-In — Azure Functions API (linked API of the Static Web App)",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.0",
+    "@azure/data-tables": "^13.2.2"
+  }
+}

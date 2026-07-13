@@ -50,8 +50,8 @@ export async function initBackend() {
 
 export const ACCESS = {
   facilitator: ['staff', 'settings'],
-  leader: ['staff', 'leader', 'settings'],
-  admin: ['staff', 'leader', 'settings', 'adminportal'],
+  leader: ['staff', 'leader', 'settings', 'ai'],
+  admin: ['staff', 'leader', 'settings', 'adminportal', 'ai'],
 }
 
 export function canAccess(role, surface) {
@@ -311,4 +311,62 @@ export async function previewReport(period, date) {
 export async function sendReportNow(period, date) {
   if (!live) return { ok: true, wouldSend: ['(demo mode — nothing sent)'] }
   return api('/reports/send', { method: 'POST', body: JSON.stringify(date ? { period, date } : { period }) })
+}
+
+// ---------------------------------------------------------------------------
+// Visitor log — non-client, non-staff people on site. Separate table, same
+// access rules and midnight reset as the front-door log.
+// ---------------------------------------------------------------------------
+
+export async function fetchVisitorRows(date) {
+  if (!live) return null
+  try {
+    const out = await api('/visitors?date=' + encodeURIComponent(date))
+    return out && Array.isArray(out.rows) ? out.rows : []
+  } catch (err) {
+    console.warn('[cholla] could not load visitor log:', err.message)
+    return null
+  }
+}
+
+export async function saveVisitorRow(date, row) {
+  if (!live) return null
+  const out = await api('/visitors/row', { method: 'POST', body: JSON.stringify({ date, row }) })
+  return out && Array.isArray(out.rows) ? out.rows : null
+}
+
+// Autocomplete data for the visitor form: recent companies + the staff /
+// facilitator directory (the Microsoft-backed accounts) for "visiting".
+export async function fetchVisitorOptions() {
+  if (!live) {
+    return {
+      companies: ['Desert Sky Supplies', 'Maricopa Health Partners', 'Family'],
+      people: ['D. Alvarez, LISAC', 'R. Okafor, LPC', 'Ruth Okafor, Clinical Director', 'S. Tran, LCSW'],
+    }
+  }
+  try {
+    return await api('/visitors/options')
+  } catch {
+    return { companies: [], people: [] }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AI assistant (leader/admin). The server builds the model's context from
+// de-identified aggregates only — client names never reach the AI.
+// ---------------------------------------------------------------------------
+
+export async function askAi(question, history) {
+  if (!live) {
+    await new Promise((r) => setTimeout(r, 400))
+    return {
+      answer:
+        'Preview build — the live assistant answers from your real attendance data once the backend and its API key are connected. A real answer looks like this:\n\n' +
+        '**Attendance is up 6.4% this week** (312 group check-ins vs 293 last week).\n\n' +
+        '| Group | This week | Last week | Trend |\n|---|---|---|---|\n| Morning 3 | 58 | 49 | ▲ +18% |\n| Afternoon 1 | 44 | 47 | ▼ −6% |\n| Afternoon 7 | 31 | 38 | ▼ −18% |\n\n' +
+        'Afternoon 7 has declined two days running — it will trigger a Volume Alert if the slide continues.',
+      model: 'preview',
+    }
+  }
+  return api('/ai/ask', { method: 'POST', body: JSON.stringify(history && history.length ? { question, history } : { question }) })
 }

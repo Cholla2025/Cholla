@@ -244,3 +244,7 @@ app.http('reports-send', {
     return json(200, { ok: true, sent: outbox.map((m) => m.subject) })
   }),
 })
+
+// The AI assistant (functions/ai.js) reuses this data pipeline so its context
+// is built from the SAME de-identified aggregates as the report emails.
+module.exports = { clinicToday, addDays, loadRange, clinicDates, buildDaily }

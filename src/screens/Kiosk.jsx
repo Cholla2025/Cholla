@@ -1,19 +1,19 @@
 import * as S from '../seed'
-import { Seg } from '../ui'
+import { Seg, noAutofill } from '../ui'
 
 const PAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Clear', '0', '⌫']
 
-export default function Kiosk({ store }) {
+export default function Kiosk({ store, onExit }) {
   const { state: st, set, actions: a, stats, getRoster, groupsFor, getGroup } = store
   const { screen } = st
 
   if (screen === 'kiosk-confirm') return <Confirm st={st} a={a} />
   if (screen === 'kiosk-closeout') return <Closeout st={st} a={a} stats={stats} getGroup={getGroup} />
   if (screen === 'kiosk-member') return <Member st={st} a={a} stats={stats} getRoster={getRoster} getGroup={getGroup} />
-  return <Start st={st} set={set} a={a} groupsFor={groupsFor} getGroup={getGroup} />
+  return <Start st={st} set={set} a={a} groupsFor={groupsFor} getGroup={getGroup} onExit={onExit} />
 }
 
-function Start({ st, set, a, groupsFor, getGroup }) {
+function Start({ st, set, a, groupsFor, getGroup, onExit }) {
   const groups = groupsFor(st.kSession)
   const kGroupLabel = st.kGroup ? S.groupLabel(st.kSession, st.kGroup) : 'Select a group above'
   const begin = st.kCode.length === 4 && !!getGroup(st.kSession, st.kGroup) && !st.kBusy
@@ -72,6 +72,7 @@ function Start({ st, set, a, groupsFor, getGroup }) {
         disabled={!begin} onClick={a.beginSession}>
         {st.kBusy ? 'Verifying…' : 'Begin session'}
       </button>
+      {onExit && <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={onExit}>Switch check-in area</button>}
       {!st.live && <div className="muted" style={{ textAlign: 'center', font: '500 12px Inter', marginTop: 12 }}>Preview facilitator code: 0 0 0 0</div>}
     </div>
   )
@@ -96,7 +97,7 @@ function Member({ st, a, stats, getRoster, getGroup }) {
 
       <div className="card" style={{ marginTop: 16 }}>
         <span className="lab">Enter your name to check {word}</span>
-        <input className="input" value={st.kEntry} onChange={a.onMemberName} placeholder="First and last name" autoFocus />
+        <input className="input" {...noAutofill()} value={st.kEntry} onChange={a.onMemberName} placeholder="First and last name" autoFocus />
         {matched && <div style={{ color: '#1F7A56', font: '600 12.5px Inter', marginTop: 10 }}>✓ We found your name</div>}
         {st.kErr && <div style={{ color: '#B14233', font: '600 12.5px Inter', marginTop: 10 }}>{st.kErr}</div>}
         <button className="btn" style={{ marginTop: 16, background: enabled ? '#BE6A45' : '#D8C3B8', boxShadow: enabled ? '0 12px 24px -10px rgba(190,106,69,.65)' : 'none' }}

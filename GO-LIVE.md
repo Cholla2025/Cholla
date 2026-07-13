@@ -273,6 +273,8 @@ Copy the output — that's your `SESSION_SECRET`.
 | `REPORTS_TRIGGER_SECRET` | Long random string the report scheduler presents (`openssl rand -base64 32`) — also stored as a GitHub repo secret in Phase 8.5. | **Required** for scheduled reports |
 | `ALERT_DROP_PCT` | Steady 2-day attendance drop (%) that triggers a Volume Alert. | Optional (default 5) |
 | `ALERT_CRITICAL_PCT` | Drop (%) above which the alert is marked CRITICAL. | Optional (default 10) |
+| `ANTHROPIC_API_KEY` | Claude API key for the in-app **AI** tab (leadership analytics Q&A). Until set, the AI tab shows a friendly not-configured message. The AI receives ONLY de-identified aggregates — client names never leave the API. | Optional |
+| `ANTHROPIC_MODEL` | Optional model override for the AI tab. | Optional (default `claude-opus-4-8`) |
 
 - [ ] All eight required settings added, values pasted with no stray
   spaces or quotes, **Apply** clicked.
@@ -404,11 +406,21 @@ Per tablet, about 5 minutes:
 
 1. [ ] Open `https://<your-site>/?kiosk=1` in the tablet's browser. This
    pins the device to kiosk mode (persists in localStorage across reloads
-   and restarts; `?kiosk=0` unpins).
-   - **Front-door tablet**: use `https://<your-site>/?door=1` instead —
-     that pins the device to the facility entrance check-in (clients check
-     in/out with just their name; same day code unlocks it; `?door=0`
-     unpins). Everything else in this phase applies identically.
+   and restarts; `?kiosk=0` unpins). Every kiosk device starts on a
+   **front page with three check-in areas**:
+   - **Group Check-In** — members checking in/out of group sessions
+   - **Site Check-In — Member** — members arriving at / leaving the facility
+   - **Visitor Check-In** — guests, vendors, and family: name, phone, and
+     company required, "person you're visiting" auto-suggests from your
+     staff directory, a reason for the visit, and a required **HIPAA
+     confidentiality acknowledgment** checkbox. No client names can be
+     entered anywhere on this form, by design.
+   Each area unlocks with the facilitator day code, and **switching areas
+   relocks the device** — so the code is also the gate for changing modes.
+   (`?door=1` still pre-selects the member site check-in for entrance
+   tablets; `?door=0` unpins.) The `visitors` table auto-creates like the
+   others — nothing to build by hand. Browser autofill is suppressed on
+   all kiosk name fields so previous entries never pop up as suggestions.
 2. [ ] Add it to the home screen so it launches full-screen — Safari:
    Share → **Add to Home Screen**; Chrome: ⋮ → **Add to Home screen**.
 3. [ ] Lock the tablet to the app:

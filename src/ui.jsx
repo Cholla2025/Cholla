@@ -54,7 +54,11 @@ export function Chips({ options, value, onChange }) {
         const a = o === value
         return (
           <button key={o} className="chip" onClick={() => onChange(o)}
-            style={{ background: a ? '#21314F' : '#fff', color: a ? '#fff' : '#5A6B85', borderColor: a ? '#21314F' : '#DCE3EE' }}>
+            style={{
+              background: a ? '#21314F' : 'transparent',
+              color: a ? '#fff' : '#5A6B85',
+              boxShadow: a ? '0 2px 6px -2px rgba(33,49,79,.3)' : 'none',
+            }}>
             {o}
           </button>
         )
@@ -87,4 +91,24 @@ export function Empty({ title, children }) {
       {children}
     </div>
   )
+}
+
+// Browsers aggressively autofill anything that looks like a name / phone /
+// email field. On a shared kiosk that would surface PREVIOUS people's entries
+// to whoever is typing — a privacy leak — so every kiosk input gets
+// autocomplete off PLUS a randomized field name (the combination the major
+// browsers and password managers actually respect; autocomplete="off" alone
+// is widely ignored).
+let nfCounter = 0
+export function noAutofill() {
+  return {
+    autoComplete: 'off',
+    autoCorrect: 'off',
+    autoCapitalize: 'words',
+    spellCheck: false,
+    name: 'nf-' + Math.random().toString(36).slice(2, 8) + '-' + nfCounter++,
+    'data-lpignore': 'true',
+    'data-form-type': 'other',
+    'data-1p-ignore': 'true',
+  }
 }

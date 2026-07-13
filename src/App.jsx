@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import logoUrl from '../Blue Agave Logo.png'
 import { useCheckIn } from './store'
-import { canAccess } from './lib/backend'
+import { canAccess, setKioskCode } from './lib/backend'
 import Kiosk from './screens/Kiosk'
 import DoorKiosk from './screens/DoorKiosk'
+import VisitorKiosk from './screens/VisitorKiosk'
 import Staff from './screens/Staff'
 import Leader from './screens/Leader'
 import Settings from './screens/Settings'
 import AdminPortal from './screens/AdminPortal'
+import Assistant from './screens/Assistant'
 import SignIn from './screens/SignIn'
 
 // Client check-in is for phones/tablets; the dashboards are desktop-only. We
@@ -53,12 +55,15 @@ const ALL_TABS = [
   { key: 'leader', label: 'Leadership', go: 'goLeader' },
   { key: 'settings', label: 'Settings', go: 'goSettings' },
   { key: 'adminportal', label: 'Admin', go: 'goAdmin' },
+  // Set apart from the management tabs with a visual gap (detached: true).
+  { key: 'ai', label: 'AI', go: 'goAi', detached: true },
 ]
 const DESK_HINTS = {
   staff: 'Authenticated · live session roster',
   leader: 'Authenticated · roll-up & day-of settings',
   settings: 'Authenticated · profile, team & access',
   adminportal: 'Administrator · global controls',
+  ai: 'Claude · aggregate data only',
 }
 
 function Footer() {
@@ -68,6 +73,58 @@ function Footer() {
       <a href="https://www.phxcw.com" target="_blank" rel="noopener noreferrer">
         Phoenix Creative Works
       </a>
+    </div>
+  )
+}
+
+const AREA_EYEBROWS = {
+  group: 'Group Check-In',
+  door: 'Member Site Check-In',
+  visitor: 'Visitor Check-In',
+}
+
+// The kiosk device shell: front page with the three check-in areas, then the
+// selected flow. Leaving a flow relocks the kiosk (the day code must be
+// re-entered), which is what makes area-switching code-protected.
+function KioskShell({ store, initialArea }) {
+  const { state: st } = store
+  const [area, setArea] = useState(initialArea)
+
+  const exitArea = () => {
+    setKioskCode(null) // relock — the next area asks for the code again
+    setArea(null)
+  }
+
+  return (
+    <div className="app app--mobile">
+      <div className="kiosk-header">
+        <img src={logoUrl} alt="Cholla Behavioral Health" />
+        <div className="kiosk-eyebrow">{AREA_EYEBROWS[area] || 'Check-In'}</div>
+      </div>
+      {area === 'group' && <Kiosk store={store} onExit={exitArea} />}
+      {area === 'door' && <DoorKiosk live={st.live} onExit={exitArea} />}
+      {area === 'visitor' && <VisitorKiosk live={st.live} onExit={exitArea} />}
+      {!area && (
+        <div className="scroll fade cholla-scroll" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div className="section-title" style={{ textAlign: 'center' }}>Welcome</div>
+          <div className="section-sub" style={{ textAlign: 'center', marginBottom: 18 }}>
+            Choose a check-in below to begin
+          </div>
+          <button className="launch-btn" onClick={() => setArea('group')}>
+            <span className="launch-title">Group Check-In</span>
+            <span className="launch-sub">Members · check in and out of your group session</span>
+          </button>
+          <button className="launch-btn" onClick={() => setArea('door')}>
+            <span className="launch-title">Site Check-In — Member</span>
+            <span className="launch-sub">Members · arriving at or leaving the facility</span>
+          </button>
+          <button className="launch-btn" onClick={() => setArea('visitor')}>
+            <span className="launch-title">Visitor Check-In</span>
+            <span className="launch-sub">Guests, vendors &amp; family · sign in and out</span>
+          </button>
+        </div>
+      )}
+      <Footer />
     </div>
   )
 }
@@ -104,17 +161,16 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kioskDevice])
 
-  // ---- KIOSK DEVICE: client check-in only (open, no sign-in) ----
+  // ---- KIOSK DEVICE: check-in only (open, no sign-in) ----
+  // A front page offers the three check-in areas; every area is unlocked with
+  // the facilitator day code, and switching areas relocks the device — so the
+  // code IS the gate for changing modes.
   if (kioskDevice) {
     return (
-      <div className="app app--mobile">
-        <div className="kiosk-header">
-          <img src={logoUrl} alt="Cholla Behavioral Health" />
-          <div className="kiosk-eyebrow">{doorPinned ? 'Front-Door Check-In' : 'Group Check-In Kiosk'}</div>
-        </div>
-        {doorPinned ? <DoorKiosk live={st.live} /> : <Kiosk store={store} />}
-        <Footer />
-      </div>
+      <KioskShell
+        store={store}
+        initialArea={doorPinned ? 'door' : null}
+      />
     )
   }
 
@@ -140,7 +196,8 @@ export default function App() {
         <img src={logoUrl} alt="Cholla" className="desk-logo" />
         <nav className="desk-tabs">
           {tabs.map((t) => (
-            <button key={t.key} onClick={a[t.go]} className={surface === t.key ? 'active' : ''}>
+            <button key={t.key} onClick={a[t.go]}
+              className={(surface === t.key ? 'active' : '') + (t.detached ? ' tab-detached' : '')}>
               {t.label}
             </button>
           ))}
@@ -157,6 +214,7 @@ export default function App() {
           {surface === 'leader' && <Leader store={store} />}
           {surface === 'settings' && <Settings store={store} />}
           {surface === 'adminportal' && <AdminPortal store={store} />}
+          {surface === 'ai' && <Assistant store={store} />}
         </div>
         <Footer />
       </main>

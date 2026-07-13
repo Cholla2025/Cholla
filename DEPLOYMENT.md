@@ -121,6 +121,8 @@ Static Web App → **Settings → Environment variables** (older portals:
 | `REPORTS_TRIGGER_SECRET` | Long random string presented by the report scheduler (also a GitHub repo secret — see GO-LIVE.md Phase 8.5). **Required for scheduled reports.** |
 | `ALERT_DROP_PCT` | Optional, default 5 — steady 2-day attendance drop (%) that emails leadership a Volume Alert. |
 | `ALERT_CRITICAL_PCT` | Optional, default 10 — drop (%) above which the alert is marked CRITICAL. |
+| `ANTHROPIC_API_KEY` | Optional — enables the leadership **AI** tab (Claude-powered analytics Q&A over de-identified aggregates; client names never reach the AI). |
+| `ANTHROPIC_MODEL` | Optional, default `claude-opus-4-8` — model for the AI tab. |
 
 Click **Apply**. Settings take effect within a minute; no redeploy needed.
 

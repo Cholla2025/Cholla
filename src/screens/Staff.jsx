@@ -39,7 +39,7 @@ export default function Staff({ store }) {
   return (
     <div className="scroll fade cholla-scroll">
       <div className="section-title">Facilitator dashboard</div>
-      <div className="section-sub">{st.staffName} · {S.TODAY_LABEL}</div>
+      <div className="section-sub">{st.staffName} · {st.todayLabel}</div>
 
       <div style={{ marginTop: 16 }}>
         <Seg options={S.SESSIONS} value={st.staffSession} onChange={a.staffSetSession} activeBg="#4C84C4" inactiveFg="#7A8AA3" />
@@ -67,7 +67,7 @@ export default function Staff({ store }) {
           <Field label="&nbsp;"><input className="input" type="date" value={st.staffTo} onChange={(e) => set({ staffTo: e.target.value })} /></Field>
         </div>
         <div className="row">
-          <button className="btn btn-ghost" onClick={() => set({ staffFrom: S.TODAY, staffTo: S.TODAY })}>Today</button>
+          <button className="btn btn-ghost" onClick={() => set({ staffFrom: st.today, staffTo: st.today })}>Today</button>
           {!st.live && (
             <button className="btn btn-ghost" onClick={a.toggleStaffView}>{st.staffView === 'live' ? 'Show empty state' : 'Show live state'}</button>
           )}
@@ -85,15 +85,19 @@ export default function Staff({ store }) {
           </div>
           <input className="input" style={{ marginTop: 12 }} value={st.staffSearch} onChange={(e) => set({ staffSearch: e.target.value })} placeholder="Search client name" />
 
-          <div className="card" style={{ marginTop: 14 }}>
-            <div className="lab" style={{ marginBottom: 10 }}>Add client to {S.groupLabel(g.session, g.n)}</div>
-            <input className="input" value={st.newName} onChange={a.onNewName} placeholder="Client name" />
-            <input className="input" style={{ marginTop: 10 }} inputMode="numeric" value={st.newId} onChange={a.onNewId} placeholder="ID (optional)" />
-            <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn btn-ghost" onClick={() => a.addClient(false)}>Add as expected</button>
-              <button className="btn" onClick={() => a.addClient(true)}>Add &amp; check in</button>
+          {st.rosterErr && <div className="signin-err" style={{ marginTop: 12 }}>{st.rosterErr}</div>}
+
+          {editable && (
+            <div className="card" style={{ marginTop: 14 }}>
+              <div className="lab" style={{ marginBottom: 10 }}>Add client to {S.groupLabel(g.session, g.n)}</div>
+              <input className="input" value={st.newName} onChange={a.onNewName} placeholder="Client name" />
+              <input className="input" style={{ marginTop: 10 }} inputMode="numeric" value={st.newId} onChange={a.onNewId} placeholder="ID (optional)" />
+              <div className="row" style={{ marginTop: 12 }}>
+                <button className="btn btn-ghost" onClick={() => a.addClient(false)}>Add as expected</button>
+                <button className="btn" onClick={() => a.addClient(true)}>Add &amp; check in</button>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="card" style={{ marginTop: 14, padding: rows.length ? '6px 16px' : 16 }}>
             {rows.length ? rows.map((r) => (

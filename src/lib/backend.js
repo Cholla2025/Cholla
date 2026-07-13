@@ -190,11 +190,20 @@ export async function fetchRosters(date) {
   }
 }
 
+// Merge ONE row into the server's copy of a roster. The server does a
+// read-merge-write with conflict retries, so a kiosk and a dashboard writing
+// at the same moment never wipe each other's check-ins. Returns the merged
+// rows array; THROWS on failure — callers must surface the error rather than
+// show a false "checked in" confirmation.
+export async function saveRosterRow(session, n, date, row) {
+  if (!live) return null
+  const out = await api('/rosters/row', { method: 'POST', body: JSON.stringify({ session, n, date, row }) })
+  return out && Array.isArray(out.rows) ? out.rows : null
+}
+
+// Whole-document replace (staff only server-side). Not used by the normal
+// check-in flows — those go through saveRosterRow so writes merge.
 export async function saveRoster(session, n, date, rows) {
   if (!live) return
-  try {
-    await api('/rosters', { method: 'PUT', body: JSON.stringify({ session, n, date, rows }) })
-  } catch (err) {
-    console.warn('[cholla] could not save roster:', err.message)
-  }
+  await api('/rosters', { method: 'PUT', body: JSON.stringify({ session, n, date, rows }) })
 }

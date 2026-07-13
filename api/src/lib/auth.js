@@ -60,25 +60,87 @@ function timingSafeEqual(a, b) {
 
 let warnedDefaultCode = false
 
-// The configured kiosk day code. '0000' is ONLY a fallback for local dev when
-// the app setting is missing — a deployment without KIOSK_CODE logs a warning
-// on every cold start so it gets noticed.
+// Running in Azure vs on a developer machine. WEBSITE_INSTANCE_ID is set by
+// the App Service/Functions platform and never by the local func host.
+function isLocalDev() {
+  return !process.env.WEBSITE_INSTANCE_ID
+}
+
+// The configured kiosk day code. FAILS CLOSED in Azure: with no KIOSK_CODE app
+// setting the kiosk simply cannot be unlocked (null never matches). The '0000'
+// fallback exists only on a local dev machine.
 function configuredKioskCode(context) {
   const code = process.env.KIOSK_CODE
   if (code) return code
   if (!warnedDefaultCode) {
     warnedDefaultCode = true
     const warn = context && context.warn ? context.warn.bind(context) : console.warn
-    warn('[cholla-api] KIOSK_CODE app setting is not set — falling back to the default "0000". Set KIOSK_CODE before go-live.')
+    warn(isLocalDev()
+      ? '[cholla-api] KIOSK_CODE is not set — using the local-dev default "0000".'
+      : '[cholla-api] KIOSK_CODE app setting is not set — kiosk unlock is DISABLED until it is configured.')
   }
-  return '0000'
+  return isLocalDev() ? '0000' : null
+}
+
+// ----- kiosk brute-force throttle -----
+// The verify endpoint is anonymous and the code space is small, so failed
+// attempts are rate limited per client IP and globally. In-memory per
+// instance — SWA-managed Functions run few instances, and the window is short
+// enough that this meaningfully slows an online guessing attack. Weekly code
+// rotation is documented in DEPLOYMENT.md as the second layer.
+const WINDOW_MS = 15 * 60 * 1000
+const MAX_FAILURES_PER_IP = 10
+const MAX_FAILURES_GLOBAL = 100
+const failures = new Map() // ip -> [timestamps]
+let globalFailures = []
+
+function clientIp(request) {
+  const fwd = request.headers.get('x-forwarded-for') || ''
+  return fwd.split(',')[0].trim() || 'unknown'
+}
+
+function prune(list, now) {
+  return list.filter((t) => now - t < WINDOW_MS)
+}
+
+// True when this client (or the whole instance) has too many recent failures.
+function kioskThrottled(request) {
+  const now = Date.now()
+  globalFailures = prune(globalFailures, now)
+  if (globalFailures.length >= MAX_FAILURES_GLOBAL) return true
+  const ip = clientIp(request)
+  const list = prune(failures.get(ip) || [], now)
+  failures.set(ip, list)
+  return list.length >= MAX_FAILURES_PER_IP
+}
+
+function registerKioskFailure(request) {
+  const now = Date.now()
+  const ip = clientIp(request)
+  const list = prune(failures.get(ip) || [], now)
+  list.push(now)
+  failures.set(ip, list)
+  globalFailures = prune(globalFailures, now)
+  globalFailures.push(now)
+  // Bound memory: drop the oldest IPs once the map grows unreasonably.
+  if (failures.size > 10000) {
+    for (const key of failures.keys()) {
+      failures.delete(key)
+      if (failures.size <= 5000) break
+    }
+  }
 }
 
 // Did this request carry a valid kiosk day code header?
 function hasValidKioskCode(request, context) {
   const sent = request.headers.get('x-kiosk-code')
   if (!sent) return false
-  return timingSafeEqual(sent, configuredKioskCode(context))
+  const code = configuredKioskCode(context)
+  if (!code) return false
+  if (kioskThrottled(request)) return false
+  const ok = timingSafeEqual(sent, code)
+  if (!ok) registerKioskFailure(request)
+  return ok
 }
 
 // Staff session OR unlocked kiosk — the two ways to touch rosters.
@@ -93,7 +155,10 @@ module.exports = {
   isStaff,
   isLeader,
   timingSafeEqual,
+  isLocalDev,
   configuredKioskCode,
+  kioskThrottled,
+  registerKioskFailure,
   hasValidKioskCode,
   isStaffOrKiosk,
 }

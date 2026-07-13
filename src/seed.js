@@ -23,27 +23,34 @@ export const FAC_NAMES = [
 ]
 
 // ----- clock & date -----
-// The app runs on the device's real date; the demo "clock" advances a minute
-// per action so times look natural without depending on when you open it.
-const now = new Date()
-export const TODAY = [
-  now.getFullYear(),
-  String(now.getMonth() + 1).padStart(2, '0'),
-  String(now.getDate()).padStart(2, '0'),
-].join('-')
-export const TODAY_LABEL = now.toLocaleDateString('en-US', {
-  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-})
+// Kiosks and dashboards are long-lived pages (a tablet can sit open for
+// days), so "today" and "which session is it" are FUNCTIONS evaluated on
+// demand, never module constants — the store re-checks them on an interval
+// and rolls the app over at midnight / midday.
+export function todayISO(d = new Date()) {
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    String(d.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+export function todayLabel(d = new Date()) {
+  return d.toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  })
+}
 
-// Which session is "now" (drives demo In Progress / Complete / Upcoming).
-export const CURRENT = now.getHours() < 12 ? 'Morning' : 'Afternoon'
+// Which session is "now" (drives In Progress / Complete / Upcoming).
+export function currentSession(d = new Date()) {
+  return d.getHours() < 12 ? 'Morning' : 'Afternoon'
+}
 
 export const DEMO_LIVE_SESSION = 'Afternoon'
 export const DEMO_LIVE_N = 3
 
 export function statusOf(g) {
   const i = SESSIONS.indexOf(g.session)
-  const c = SESSIONS.indexOf(CURRENT)
+  const c = SESSIONS.indexOf(currentSession())
   return i < c ? 'Complete' : i === c ? 'In Progress' : 'Upcoming'
 }
 
@@ -200,12 +207,14 @@ export function fmtDate(iso) {
   return M[parseInt(p[1], 10) - 1] + ' ' + parseInt(p[2], 10) + ', ' + p[0]
 }
 export function rangeHasToday(from, to) {
-  const f = from || TODAY, t = to || TODAY
+  const today = todayISO()
+  const f = from || today, t = to || today
   const lo = f <= t ? f : t, hi = f <= t ? t : f
-  return lo <= TODAY && TODAY <= hi
+  return lo <= today && today <= hi
 }
 export function rangeLabel(from, to) {
-  const f = from || TODAY, t = to || TODAY
+  const today = todayISO()
+  const f = from || today, t = to || today
   const lo = f <= t ? f : t, hi = f <= t ? t : f
   return lo === hi ? fmtDate(lo) : fmtDate(lo) + ' – ' + fmtDate(hi)
 }

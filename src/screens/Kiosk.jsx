@@ -84,7 +84,7 @@ function Member({ st, a, stats, getRoster, getGroup }) {
   const matched = q.length >= 2 && getRoster(g).some((r) => r.name.toLowerCase() === q)
   const word = st.kMode === 'in' ? 'in' : 'out'
   const label = st.kMode === 'in' ? 'Check in' : 'Check out'
-  const enabled = st.kEntry.trim().length >= 2
+  const enabled = st.kEntry.trim().length >= 2 && !st.kSaving
   return (
     <div className="scroll fade cholla-scroll">
       <div className="section-title">{st.kSession} session</div>
@@ -98,9 +98,10 @@ function Member({ st, a, stats, getRoster, getGroup }) {
         <span className="lab">Enter your name to check {word}</span>
         <input className="input" value={st.kEntry} onChange={a.onMemberName} placeholder="First and last name" autoFocus />
         {matched && <div style={{ color: '#1F7A56', font: '600 12.5px Inter', marginTop: 10 }}>✓ We found your name</div>}
+        {st.kErr && <div style={{ color: '#B14233', font: '600 12.5px Inter', marginTop: 10 }}>{st.kErr}</div>}
         <button className="btn" style={{ marginTop: 16, background: enabled ? '#BE6A45' : '#D8C3B8', boxShadow: enabled ? '0 12px 24px -10px rgba(190,106,69,.65)' : 'none' }}
           disabled={!enabled} onClick={a.doCheck}>
-          {label}
+          {st.kSaving ? 'Saving…' : label}
         </button>
       </div>
 

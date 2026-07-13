@@ -74,9 +74,20 @@ async function seedGroups(context) {
       })
     }
   }
-  await client.submitTransaction(entities.map((e) => ['create', e]))
-  context.log('[cholla-api] seeded ' + entities.length + ' default groups')
-  return entities
+  try {
+    await client.submitTransaction(entities.map((e) => ['create', e]))
+    context.log('[cholla-api] seeded ' + entities.length + ' default groups')
+    return entities
+  } catch (err) {
+    // A concurrent first request already seeded (the transaction is atomic, so
+    // the loser's whole batch fails with a conflict). Re-read instead of 500ing.
+    if (err && (err.statusCode === 409 || err.statusCode === 412)) {
+      context.log('[cholla-api] groups were seeded by a concurrent request — re-reading')
+      const { groups } = await listOrgEntities()
+      return groups
+    }
+    throw err
+  }
 }
 
 app.http('org-get', {

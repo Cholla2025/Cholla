@@ -105,15 +105,20 @@ Static Web App → **Settings → Environment variables** (older portals:
 | Name | Value |
 | --- | --- |
 | `STORAGE_CONNECTION_STRING` | The connection string from step 2.6 |
-| `KIOSK_CODE` | The facilitator day code for the kiosk keypad, e.g. a 4–6 digit number. **Do not skip this** — without it the API falls back to `0000` and logs a warning. |
+| `KIOSK_CODE` | The facilitator day code for the kiosk keypad — **exactly 4 digits** (the keypad accepts only 4). **Required**: until it is set, kiosk unlock is disabled entirely (the API fails closed; the `0000` fallback exists only on a local dev machine). |
 | `AZURE_CLIENT_ID` | Application (client) ID from step 3.4 |
 | `AZURE_CLIENT_SECRET` | Client secret value from step 3.5 |
+| `CLINIC_TIMEZONE` | Optional, defaults to `America/Phoenix`. Defines the clinic's calendar day — kiosks may only read/write rosters for the current day (±1) in this timezone. |
 
 Click **Apply**. Settings take effect within a minute; no redeploy needed.
 
 To rotate the kiosk code (recommended weekly, and any time a device goes
 missing): change `KIOSK_CODE` here → **Apply** → facilitators re-unlock
 kiosks with the new code. Unlocked kiosks stop working on their next request.
+
+Brute-force protection: failed unlock attempts are rate limited (10 per IP,
+100 total, per 15 minutes) and the comparison is timing-safe. Weekly code
+rotation keeps the small 4-digit space safe in practice.
 
 ## Step 6 — Invite staff and assign roles
 
@@ -146,8 +151,10 @@ Run through this on the production URL before the first session:
    a facilitator, remove the test group.
 5. Sign in with a Microsoft account that has **no** role: confirm they see
    the access-pending screen and no client data.
-6. Delete the fictional test check-in data (check the person out or edit the
-   roster) before real use.
+6. Delete the fictional test check-in data before real use: open the
+   Storage Account → **Storage browser → Tables → rosters** and delete the
+   test day's row (or the whole test date partition). Checking the person
+   out does NOT remove the name from the stored roster.
 
 ## Tablet (kiosk) setup
 
@@ -242,7 +249,7 @@ them on first run).
 | --- | --- |
 | Site loads but shows **demo data** and a demo banner | `/api/health` is failing. Check GitHub Actions ran green, and that the workflow's `api_location` deployed (Static Web App → **Functions** should list `health`, `org-get`, `rosters-get`, …). |
 | `/api/org` returns 500 | Missing/typo'd `STORAGE_CONNECTION_STRING`. Check step 5, then Static Web App → **Functions → (any function) → Monitor** or Application Insights for the error. |
-| Kiosk code always rejected | `KIOSK_CODE` not set (server falls back to `0000`) or set with stray whitespace. Fix the app setting, **Apply**, retry — no redeploy needed. |
+| Kiosk code always rejected | `KIOSK_CODE` not set (kiosk unlock is disabled until it is) or set with stray whitespace or more/fewer than 4 digits. Fix the app setting, **Apply**, retry — no redeploy needed. |
 | Staff sign-in loops or errors (`AADSTS…`) | Redirect URI missing/wrong (step 3.7 — must end in `/.auth/login/aad/callback`), `<YOUR-TENANT-ID>` not replaced in `staticwebapp.config.json`, or `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET` missing/expired. |
 | Signed in but stuck on "access pending" | The account has no role yet — invite it in **Role management** (step 6) with `facilitator`, `leader`, or `admin`, and make sure they accepted the invite link. |
 | Leader actions fail with 403 | The account has `facilitator` only. Org changes need `leader` or `admin`. |

@@ -8,7 +8,7 @@ export default function Leader({ store }) {
   return (
     <div className="scroll fade cholla-scroll">
       <div className="section-title">Leadership overview</div>
-      <div className="section-sub">{st.leaderName} · {S.TODAY_LABEL}</div>
+      <div className="section-sub">{st.leaderName} · {st.todayLabel}</div>
       <div style={{ marginTop: 14, maxWidth: 380 }}>
         <Seg options={['Overview', 'Day-of settings']}
           value={st.leaderView === 'settings' ? 'Day-of settings' : 'Overview'}
@@ -70,7 +70,7 @@ function Overview({ store }) {
           <Field label="Dates"><input className="input" type="date" value={st.leaderFrom} onChange={(e) => set({ leaderFrom: e.target.value })} /></Field>
           <Field label="&nbsp;"><input className="input" type="date" value={st.leaderTo} onChange={(e) => set({ leaderTo: e.target.value })} /></Field>
         </div>
-        <button className="btn btn-ghost" onClick={() => set({ leaderFrom: S.TODAY, leaderTo: S.TODAY })}>Today</button>
+        <button className="btn btn-ghost" onClick={() => set({ leaderFrom: st.today, leaderTo: st.today })}>Today</button>
       </div>
 
       <div style={{ marginTop: 14, overflowX: 'auto' }} className="cholla-scroll">
@@ -244,7 +244,7 @@ function Detail({ store }) {
     <div className="scroll fade cholla-scroll">
       <button className="btn btn-ghost" style={{ width: 'auto', padding: '8px 14px', font: '600 13px Inter' }} onClick={a.backToOverview}>← All groups</button>
       <div className="section-title" style={{ marginTop: 14 }}>Group {g.n}</div>
-      <div className="section-sub">{facLabelFor(g)} · {g.session} session · {S.TODAY_LABEL}</div>
+      <div className="section-sub">{facLabelFor(g)} · {g.session} session · {st.todayLabel}</div>
       <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
         <span className="pill" style={{ background: chipBg, color: chipFg, font: '600 11.5px Inter' }}>{g.name}</span>
         <Badge status={S.statusOf(g)} />

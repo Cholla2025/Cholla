@@ -92,7 +92,10 @@ function Member({ st, a, stats, getRoster, getGroup }) {
   return (
     <div className="scroll fade cholla-scroll">
       <div className="section-title">{st.kSession} session</div>
-      <div className="section-sub">{S.groupLabel(st.kSession, st.kGroup)} · {present} present now</div>
+      <div className="section-sub">
+        {S.groupLabel(st.kSession, st.kGroup)} · {present} present now
+        {st.kUnlockedBy ? ' · unlocked by ' + st.kUnlockedBy : ''}
+      </div>
 
       <div style={{ marginTop: 16 }}>
         <Seg options={['Check in', 'Check out']} value={st.kMode === 'in' ? 'Check in' : 'Check out'} onChange={a.setKMode} />

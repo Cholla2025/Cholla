@@ -6,21 +6,27 @@
 // live mode the org structure and rosters come from the API and the demo
 // generators below are never consulted.
 
-export const CLIENTS = [
+// DEV-ONLY: `import.meta.env.DEV` is statically false in a production build,
+// so the minifier strips every fictional name below out of the shipped
+// bundle entirely — demo data cannot exist in production, not even as dead
+// strings.
+const DEV = import.meta.env.DEV
+
+export const CLIENTS = DEV ? [
   'Maria Alvarez', 'James Carter', 'Dana Whitfield', 'Robert Nguyen', 'Latoya Brooks',
   'Kevin Park', 'Angela Ruiz', 'Marcus Webb', 'Priya Shah', 'Thomas Reed',
-]
-export const WALKINS = ['Sofia Delgado', 'Aaron Pike', 'Renee Coleman', 'Victor Hahn', 'Bianca Ford']
+] : []
+export const WALKINS = DEV ? ['Sofia Delgado', 'Aaron Pike', 'Renee Coleman', 'Victor Hahn', 'Bianca Ford'] : []
 
 // Two daily IOP sessions, ten groups each. (There is no evening programming.)
 export const SESSIONS = ['Morning', 'Afternoon']
 export const GROUPS_PER_SESSION = 10
 
-export const FAC_NAMES = [
+export const FAC_NAMES = DEV ? [
   ['R. Okafor', 'LPC'], ['S. Tran', 'LCSW'], ['D. Alvarez', 'LISAC'], ['M. Greene', 'LPC'],
   ['J. Whitman', 'LCSW'], ['A. Castillo', 'LISAC'], ['P. Bennett', 'LMFT'], ['K. Rios', 'LCSW'],
   ['L. Foster', 'PMHNP'], ['T. Nash', 'LPC'],
-]
+] : []
 
 // ----- clock & date -----
 // Kiosks and dashboards are long-lived pages (a tablet can sit open for
@@ -122,7 +128,7 @@ function slotTime(session, i) {
 
 // The live ("Afternoon · Group 3") roster shown in the demo by default.
 export function initialRoster() {
-  return [
+  return DEV ? [
     { id: '1042', name: 'Maria Alvarez', checkin: '1:02 PM', checkout: null, status: 'Checked In' },
     { id: '1108', name: 'James Carter', checkin: '1:05 PM', checkout: '2:48 PM', status: 'Checked Out' },
     { id: '1190', name: 'Dana Whitfield', checkin: '1:08 PM', checkout: null, status: 'Checked In' },
@@ -133,7 +139,7 @@ export function initialRoster() {
     { id: '1502', name: 'Marcus Webb', checkin: null, checkout: null, status: 'Absent' },
     { id: '1560', name: 'Priya Shah', checkin: '1:00 PM', checkout: '2:50 PM', status: 'Checked Out' },
     { id: '1633', name: 'Thomas Reed', checkin: '1:15 PM', checkout: null, status: 'Checked In' },
-  ]
+  ] : []
 }
 
 // Deterministic roster for any other demo group.
@@ -194,7 +200,7 @@ export function pillColors(status) {
 
 // Demo client list — fictional clients for the Clients management view.
 export function defaultClients() {
-  const names = ['Alex Rivera', 'Jasmine Cole', 'Marcus Webb', 'Nina Patel', 'Owen Fletcher', 'Tessa Nguyen']
+  const names = DEV ? ['Alex Rivera', 'Jasmine Cole', 'Marcus Webb', 'Nina Patel', 'Owen Fletcher', 'Tessa Nguyen'] : []
   return names.map((name, i) => ({
     id: 'demo-c' + i,
     name,
@@ -206,11 +212,11 @@ export function defaultClients() {
 
 // Demo visitor log — fictional non-client visitors for the Visitors panel.
 export function defaultVisitors() {
-  const rows = [
+  const rows = DEV ? [
     { first: 'Jordan', last: 'Ellis', company: 'Desert Sky Supplies', visiting: 'Ruth Okafor, Clinical Director', reason: 'Vendor / delivery' },
     { first: 'Priya', last: 'Natarajan', company: 'Maricopa Health Partners', visiting: 'R. Okafor, LPC', reason: 'Meeting' },
     { first: 'Sam', last: 'Whitaker', company: 'Family', visiting: '', reason: 'Graduation' },
-  ]
+  ] : []
   return rows.map((r, i) => {
     const inMin = 9 * 60 + 5 + i * 42
     const out = i === 0 ? fmtClock(inMin + 35) : null
@@ -227,10 +233,10 @@ export function defaultVisitors() {
   })
 }
 
-// Demo front-door log — fictional walk-ins for the facility panel and door
+// Demo member check-in log — fictional walk-ins for the facility panel and door
 // kiosk when no backend is connected.
 export function defaultDoor() {
-  const names = ['Sofia Delgado', 'Aaron Pike', 'Renee Coleman', 'Victor Hahn', 'Bianca Ford', 'Miles Archer']
+  const names = DEV ? ['Sofia Delgado', 'Aaron Pike', 'Renee Coleman', 'Victor Hahn', 'Bianca Ford', 'Miles Archer'] : []
   return names.map((name, i) => {
     const inMin = 8 * 60 + 22 + i * 19
     const out = i < 2 ? fmtClock(inMin + 190) : null

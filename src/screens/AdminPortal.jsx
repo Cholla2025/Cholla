@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import * as S from '../seed'
 import * as B from '../lib/backend'
-import { Seg, Field, Empty } from '../ui'
+import { Seg, Field } from '../ui'
 import { Accounts } from './Settings'
 import { OrgSettings } from './Leader'
+import Reports from './Reports'
 
 // Global Admin Portal — the owner's control surface, visible ONLY to the
 // admin role. Everything here is enforced server-side too; this page is a
@@ -12,11 +13,10 @@ import { OrgSettings } from './Leader'
 //   Access     — every sign-in account incl. other admins and leadership
 //   Organization — master group & facilitator controls
 //   Reports    — preview any report exactly as it will be emailed; send now
-//   Data       — CSV export of rosters and the front-door log by date range
+//   Data       — CSV export of rosters and the Member Check-In log by date range
 //   Danger     — reset groups to the default schedule (type-to-confirm)
 
 const VIEWS = ['Access', 'Organization', 'Reports', 'Data', 'Danger zone']
-const PERIODS = ['daily', 'weekly', 'monthly', 'quarterly']
 
 export default function AdminPortal({ store }) {
   const { state: st } = store
@@ -50,81 +50,6 @@ export default function AdminPortal({ store }) {
       {view === 'Reports' && <Reports store={store} />}
       {view === 'Data' && <Exports store={store} />}
       {view === 'Danger zone' && <Danger store={store} />}
-    </div>
-  )
-}
-
-function Reports({ store }) {
-  const { state: st } = store
-  const [period, setPeriod] = useState('daily')
-  const [preview, setPreview] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState('')
-  const [err, setErr] = useState('')
-
-  const loadPreview = async () => {
-    setBusy(true); setErr(''); setMsg(''); setPreview(null)
-    try {
-      const out = await B.previewReport(period)
-      if (out && out.html) setPreview(out)
-      else setErr(st.live ? 'No preview returned — is any data recorded yet?' : 'Demo mode: report previews need the live backend')
-    } catch (e) {
-      setErr(e.message || 'Could not build the preview')
-    }
-    setBusy(false)
-  }
-
-  const sendNow = async () => {
-    if (!window.confirm('Send the ' + period + ' report to the configured leadership recipients right now?')) return
-    setBusy(true); setErr(''); setMsg('')
-    try {
-      const out = await B.sendReportNow(period)
-      const sent = (out && (out.sent || out.wouldSend)) || []
-      setMsg(sent.length ? 'Sent: ' + sent.join(' · ') : 'Nothing to send')
-    } catch (e) {
-      setErr(e.message || 'Send failed')
-    }
-    setBusy(false)
-  }
-
-  return (
-    <div className="admin-section">
-      <div className="admin-h">Reports &amp; volume alerts</div>
-      <div className="card admin-form">
-        <Field label="Report">
-          <select className="select" value={period} onChange={(e) => { setPeriod(e.target.value); setPreview(null); setMsg('') }}>
-            {PERIODS.map((p) => <option key={p} value={p}>{p[0].toUpperCase() + p.slice(1)}</option>)}
-          </select>
-        </Field>
-        <button className="btn btn-ghost" style={{ width: 'auto', alignSelf: 'end' }} disabled={busy} onClick={loadPreview}>
-          {busy ? 'Working…' : 'Preview'}
-        </button>
-        <button className="btn" style={{ width: 'auto', alignSelf: 'end' }} disabled={busy} onClick={sendNow}>Send now</button>
-      </div>
-      {msg && <div className="card" style={{ marginTop: 12, color: '#1F7A56', font: '600 13px Inter' }}>{msg}</div>}
-      {err && <div className="signin-err" style={{ marginTop: 12 }}>{err}</div>}
-
-      <div className="card" style={{ marginTop: 12 }}>
-        <div className="roster-name">How the automation works</div>
-        <div className="section-sub" style={{ marginTop: 6, marginBottom: 0 }}>
-          A scheduled job calls the reports API daily (plus weekly on Mondays,
-          monthly on the 1st, quarterly each Jan/Apr/Jul/Oct). Recipients come
-          from the <b>REPORT_EMAILS</b> setting. The daily run also checks every
-          group for a steady two-day drop — more than <b>5%</b> emails leadership
-          a Volume Alert; more than <b>10%</b> is marked <b>CRITICAL</b>
-          (thresholds: <b>ALERT_DROP_PCT</b> / <b>ALERT_CRITICAL_PCT</b>).
-          Reports contain counts and trends only — never client names.
-        </div>
-      </div>
-
-      {preview && (
-        <div className="card" style={{ marginTop: 12, padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #E4E9F1', font: '600 13px Inter' }}>
-            {preview.subject}
-          </div>
-          <iframe title="Report preview" srcDoc={preview.html} sandbox="" style={{ width: '100%', height: 640, border: 'none', background: '#F4F7FB' }} />
-        </div>
-      )}
     </div>
   )
 }
@@ -187,7 +112,7 @@ function Exports({ store }) {
       }
       const stamp = from === to ? from : from + '_to_' + to
       if (kind === 'rosters') downloadCsv('cholla-rosters-' + stamp + '.csv', ['date', 'session', 'group', 'client', 'id', 'check_in', 'check_out', 'status'], rows)
-      else downloadCsv('cholla-front-door-' + stamp + '.csv', ['date', 'name', 'in', 'out', 'status'], rows)
+      else downloadCsv('cholla-member-checkin-' + stamp + '.csv', ['date', 'name', 'in', 'out', 'status'], rows)
       setMsg('Exported ' + rows.length + ' row(s) across ' + days.length + ' day(s)')
     } catch (e) {
       setErr(e.message || 'Export failed'); setMsg('')
@@ -207,7 +132,7 @@ function Exports({ store }) {
         <Field label="From"><input className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
         <Field label="To"><input className="input" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></Field>
         <button className="btn" style={{ width: 'auto', alignSelf: 'end' }} disabled={busy} onClick={() => run('rosters')}>Export group rosters</button>
-        <button className="btn btn-ghost" style={{ width: 'auto', alignSelf: 'end' }} disabled={busy} onClick={() => run('door')}>Export front-door log</button>
+        <button className="btn btn-ghost" style={{ width: 'auto', alignSelf: 'end' }} disabled={busy} onClick={() => run('door')}>Export Member Check-In log</button>
       </div>
       {msg && <div className="card" style={{ marginTop: 12, color: '#1F7A56', font: '600 13px Inter' }}>{msg}</div>}
       {err && <div className="signin-err" style={{ marginTop: 12 }}>{err}</div>}
@@ -270,7 +195,7 @@ function Danger({ store }) {
       <div className="card" style={{ marginTop: 12 }}>
         <div className="roster-name">Deleting client data</div>
         <div className="section-sub" style={{ marginTop: 6, marginBottom: 0 }}>
-          Roster and front-door history is deliberately NOT deletable from this
+          Roster and Member Check-In history is deliberately NOT deletable from this
           screen — purging PHI is a compliance action. Delete specific dates in
           Azure: Storage Account → <b>Storage browser → Tables</b> →
           <b> rosters</b> / <b>frontdoor</b>, where each day is one row keyed by

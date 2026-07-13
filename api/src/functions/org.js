@@ -26,7 +26,7 @@ const {
   isValidN,
   isValidId,
 } = require('../lib/util')
-const { isStaff, requireLeader } = require('../lib/auth')
+const { isStaff, requireLeader, requireStaff, hashKioskCode, clearFacilitatorCodeCache, sessionSecret } = require('../lib/auth')
 const {
   orgTable,
   groupFromEntity,
@@ -249,6 +249,69 @@ app.http('org-facilitators-create', {
     const client = await orgTable()
     await client.createEntity(facilitatorToEntity(facilitator))
     return json(201, { facilitator })
+  }),
+})
+
+// Set, rotate or clear a facilitator's personal 4-digit kiosk code.
+// Leadership can manage any facilitator's code; a facilitator may set their
+// OWN (matched by the email on their facilitator record). The code is stored
+// only as a hash and is never logged or echoed back.
+app.http('org-facilitators-code', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'org/facilitators/{id}/code',
+  handler: guard(async (request) => {
+    const who = await requireStaff(request)
+    if (who.status) return who
+
+    const id = request.params.id
+    if (!isValidId(id)) return json(400, { error: 'Invalid facilitator id' })
+    const entity = await getEntity('facilitator', id)
+    if (!entity) return json(404, { error: 'Facilitator not found' })
+
+    const isLeadership = ['leader', 'admin'].includes(who.role)
+    const ownRecord =
+      typeof who.email === 'string' &&
+      who.email &&
+      String(entity.email || '').toLowerCase() === who.email.toLowerCase()
+    if (!isLeadership && !ownRecord) {
+      return json(403, { error: 'You can only manage your own kiosk code' })
+    }
+
+    const body = await readJson(request)
+    if (!body) return json(400, { error: 'Body must be a JSON object' })
+
+    const client = await orgTable()
+    if (body.code === null || body.code === '') {
+      await client.updateEntity(
+        { partitionKey: 'facilitator', rowKey: id, codeHash: '', codeSetAt: '' },
+        'Merge'
+      )
+      clearFacilitatorCodeCache()
+      return json(200, { ok: true, hasCode: false })
+    }
+
+    if (typeof body.code !== 'string' || !/^\d{4}$/.test(body.code)) {
+      return json(400, { error: 'code must be exactly 4 digits' })
+    }
+    if (!sessionSecret()) {
+      return json(503, { error: 'Kiosk codes are not configured (SESSION_SECRET app setting missing)' })
+    }
+    if (entity.active === false) {
+      return json(400, { error: 'Reactivate this facilitator before setting a kiosk code' })
+    }
+
+    await client.updateEntity(
+      {
+        partitionKey: 'facilitator',
+        rowKey: id,
+        codeHash: hashKioskCode(id, body.code),
+        codeSetAt: new Date().toISOString(),
+      },
+      'Merge'
+    )
+    clearFacilitatorCodeCache()
+    return json(200, { ok: true, hasCode: true })
   }),
 })
 

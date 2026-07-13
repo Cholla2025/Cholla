@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import * as S from '../seed'
 import { Seg, Chips, Kpi, Pill, Badge, ActionButton, Field, Empty } from '../ui'
-import FrontDoor from './FrontDoor'
 import Clients from './Clients'
+import Reports from './Reports'
+import DirectoryPicker from '../DirectoryPicker'
 
-const LEADER_VIEWS = { Overview: 'overview', 'Front door': 'door', Clients: 'clients', 'Day-of settings': 'settings' }
+const LEADER_VIEWS = { Overview: 'overview', Clients: 'clients', Reports: 'reports', 'Day-of settings': 'settings' }
 
 export default function Leader({ store }) {
   const { state: st, actions: a } = store
@@ -19,8 +20,8 @@ export default function Leader({ store }) {
           onChange={(o) => a.setLeaderView(LEADER_VIEWS[o])} />
       </div>
       {st.leaderView === 'settings' ? <OrgSettings store={store} />
-        : st.leaderView === 'door' ? <FrontDoor store={store} />
         : st.leaderView === 'clients' ? <Clients store={store} />
+        : st.leaderView === 'reports' ? <Reports store={store} />
         : <Overview store={store} />}
     </div>
   )
@@ -158,6 +159,7 @@ export function OrgSettings({ store }) {
       <div className="admin-section">
         <div className="admin-h">Facilitators</div>
         <div className="card admin-form">
+          <DirectoryPicker onPick={(u) => setNf((p) => ({ ...p, name: u.name, email: u.email }))} />
           <Field label="Name"><input className="input" value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} placeholder="Full name" /></Field>
           <Field label="Credential"><input className="input" value={nf.credential} onChange={(e) => setNf({ ...nf, credential: e.target.value })} placeholder="LPC, LCSW…" /></Field>
           <Field label="Email"><input className="input" type="email" value={nf.email} onChange={(e) => setNf({ ...nf, email: e.target.value })} placeholder="name@chollabh.org" /></Field>

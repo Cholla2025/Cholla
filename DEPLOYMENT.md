@@ -109,7 +109,7 @@ Static Web App → **Settings → Environment variables** (older portals:
 | Name | Value |
 | --- | --- |
 | `STORAGE_CONNECTION_STRING` | The connection string from step 2.6 |
-| `KIOSK_CODE` | The facilitator day code for the kiosk keypad — **exactly 4 digits** (the keypad accepts only 4). **Required**: until it is set, kiosk unlock is disabled entirely (the API fails closed; the `0000` fallback exists only on a local dev machine). |
+| `KIOSK_CODE` | The **admin master/fallback** kiosk code — **exactly 4 digits**. Each facilitator also has a personal 4-digit code (set/rotated in **Settings → Facilitator kiosk codes**, stored hashed; the kiosk records whose code unlocked it). The `0000` fallback exists only on a local dev machine. |
 | `AZURE_CLIENT_ID` | Application (client) ID from step 3.4 |
 | `AZURE_CLIENT_SECRET` | Client secret value from step 3.5 |
 | `SESSION_SECRET` | Long random string (32+ chars — e.g. `openssl rand -base64 48`) that signs email-code sessions. **Required for email one-time-code sign-in.** Treat like a password. |

@@ -127,6 +127,13 @@ function isAdminEmail(email) {
   return typeof email === 'string' && adminEmails().includes(email.toLowerCase())
 }
 
+// Super admins are the ADMIN_EMAILS addresses. Only they may create, promote,
+// demote, deactivate or delete ADMIN accounts — and nobody (super admin or
+// not) may modify a super admin's own record through the staff endpoints.
+function isSuperAdmin(who) {
+  return Boolean(who && who.role === 'admin' && isAdminEmail(who.email))
+}
+
 // ----- identity resolution -----
 
 // Who is making this request? Returns { email, name, role, provider } or
@@ -139,7 +146,14 @@ async function identityOf(request) {
     const email = principal.userDetails || ''
     let role = ROLE_PRIORITY.find((r) => principal.userRoles.includes(r)) || null
     let name = email
-    if (!role && isValidEmail(email)) {
+    if (isValidEmail(email) && isAdminEmail(email)) {
+      // Bootstrap admins from ADMIN_EMAILS always resolve to admin — over
+      // Entra exactly like over email sign-in, record or not. Without this the
+      // first admin could sign in with Microsoft but land with no access.
+      role = 'admin'
+      const record = await getStaffByEmail(email)
+      if (record && record.name) name = record.name
+    } else if (!role && isValidEmail(email)) {
       // No platform role — an ACTIVE staff record for this address still
       // grants its role, so email-invited staff can also sign in with Entra.
       const record = await getStaffByEmail(email)
@@ -147,6 +161,9 @@ async function identityOf(request) {
         role = record.role
         name = record.name || name
       }
+    } else if (role && isValidEmail(email)) {
+      const record = await getStaffByEmail(email)
+      if (record && record.name) name = record.name
     }
     return { email, name, role, provider: 'aad' }
   }
@@ -274,21 +291,81 @@ function registerKioskFailure(request) {
   }
 }
 
-// Did this request carry a valid kiosk day code header?
-function hasValidKioskCode(request, context) {
+// ----- per-facilitator kiosk codes -----
+// Every active facilitator can hold their own 4-digit code (set/rotated in
+// Settings), stored ONLY as sha256(facilitatorId|code|secret) on the
+// facilitator record — never in the clear. The KIOSK_CODE app setting remains
+// as the admin master/fallback code during the transition. Codes are never
+// logged.
+
+function hashKioskCode(facilitatorId, code) {
+  const secret = sessionSecret()
+  if (!secret) return null
+  return crypto.createHash('sha256').update(facilitatorId + '|' + code + '|' + secret).digest('hex')
+}
+
+// Active facilitators holding a code, cached briefly so the per-request check
+// doesn't scan the org table every time.
+const FAC_CODE_TTL_MS = 60 * 1000
+let facCodeCache = { list: null, exp: 0 }
+
+async function facilitatorCodeList() {
+  const now = Date.now()
+  if (facCodeCache.list && now < facCodeCache.exp) return facCodeCache.list
+  // Lazy require keeps module load order simple (storage never requires auth).
+  const { listOrgEntities } = require('./storage')
+  const { facilitators } = await listOrgEntities()
+  const list = facilitators
+    .filter((f) => f.active !== false && f.codeHash)
+    .map((f) => ({ id: f.rowKey, name: f.name || '', codeHash: String(f.codeHash) }))
+  facCodeCache = { list, exp: now + FAC_CODE_TTL_MS }
+  return list
+}
+
+// Called when a code is set/rotated so the same instance honors it at once.
+function clearFacilitatorCodeCache() {
+  facCodeCache = { list: null, exp: 0 }
+}
+
+// Which credential does this code match?
+//   { via: 'master' }                                       — KIOSK_CODE
+//   { via: 'facilitator', facilitatorId, facilitatorName }  — a personal code
+//   null                                                    — no match
+// Every facilitator entry is compared (no early exit) so response timing
+// never reveals which record matched.
+async function matchKioskCode(code, context) {
+  if (typeof code !== 'string' || !code || code.length > 64) return null
+  const master = configuredKioskCode(context)
+  if (master && timingSafeEqual(code, master)) return { via: 'master' }
+  if (!/^\d{4}$/.test(code) || !sessionSecret()) return null
+  const sentHashes = new Map()
+  let match = null
+  for (const f of await facilitatorCodeList()) {
+    const h = sentHashes.get(f.id) || hashKioskCode(f.id, code)
+    sentHashes.set(f.id, h)
+    if (h && timingSafeEqual(h, f.codeHash)) match = f
+  }
+  return match ? { via: 'facilitator', facilitatorId: match.id, facilitatorName: match.name } : null
+}
+
+// Did this request carry a valid kiosk code header? Resolves to the match
+// descriptor (truthy) or false — callers that only need a boolean can use it
+// directly, callers that record WHO unlocked read `.facilitatorId`.
+async function hasValidKioskCode(request, context) {
   const sent = request.headers.get('x-kiosk-code')
   if (!sent) return false
-  const code = configuredKioskCode(context)
-  if (!code) return false
   if (kioskThrottled(request)) return false
-  const ok = timingSafeEqual(sent, code)
-  if (!ok) registerKioskFailure(request)
-  return ok
+  const match = await matchKioskCode(sent, context)
+  if (!match) {
+    registerKioskFailure(request)
+    return false
+  }
+  return match
 }
 
 // Staff session OR unlocked kiosk — the two ways to touch rosters.
 async function isStaffOrKiosk(request, context) {
-  return (await isStaff(request)) || hasValidKioskCode(request, context)
+  return (await isStaff(request)) || Boolean(await hasValidKioskCode(request, context))
 }
 
 module.exports = {
@@ -302,6 +379,7 @@ module.exports = {
   isLeader,
   adminEmails,
   isAdminEmail,
+  isSuperAdmin,
   sessionSecret,
   issueSessionToken,
   verifySessionToken,
@@ -311,6 +389,9 @@ module.exports = {
   configuredKioskCode,
   kioskThrottled,
   registerKioskFailure,
+  hashKioskCode,
+  clearFacilitatorCodeCache,
+  matchKioskCode,
   hasValidKioskCode,
   isStaffOrKiosk,
 }

@@ -2,13 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import * as S from '../seed'
 import * as B from '../lib/backend'
 import { Seg, Field, noAutofill } from '../ui'
+import { HIPAA_STATEMENT } from '../hipaa'
+import PreregQueue from './PreregQueue'
 
-// Visitor check-in — the third kiosk area, for people who are neither clients
-// nor staff. Collects name/phone/company (required), email (optional), who
-// they're visiting (auto-suggests from the staff/facilitator directory), and
-// a reason for the visit. "Visiting a client" deliberately has NO client-name
-// field, and nobody enters the site without checking the HIPAA
-// confidentiality acknowledgment.
+// Community Check-In — the third kiosk area, for people who are neither
+// clients nor staff (guests, vendors, family). Collects name/phone/company
+// (required), email (optional), who they're visiting (auto-suggests from the
+// staff/facilitator directory), and a reason for the visit. "Visiting a
+// client" deliberately has NO client-name field, and nobody enters the site
+// without checking the HIPAA confidentiality acknowledgment. Pre-registered
+// visitors (from the public /preregister page) appear in a confirm queue once
+// the kiosk is unlocked.
 //
 // Every input carries noAutofill() so the browser never suggests a previous
 // visitor's name/phone/email on this shared tablet.
@@ -23,17 +27,7 @@ const REASONS = [
   'Other',
 ]
 
-// Confidentiality acknowledgment shown at check-in. Update the wording here
-// when the final approved statement arrives — one string, nothing else moves.
-export const HIPAA_STATEMENT =
-  'Under the Health Insurance Portability and Accountability Act (HIPAA), ' +
-  '“individually identifiable health information” may be disclosed only with ' +
-  'written permission to anyone other than the patient. While on site I may ' +
-  'unintentionally see or hear protected health information; I agree to keep ' +
-  'anything I observe confidential, to keep all discussions about patient ' +
-  'care in private settings, and to access no medical records or client ' +
-  'information. All medical records are accessed on an as-needed basis by ' +
-  'authorized staff only.'
+export { HIPAA_STATEMENT }
 
 const PAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Clear', '0', '⌫']
 
@@ -74,8 +68,8 @@ export default function VisitorKiosk({ live, onExit }) {
   const unlock = async () => {
     if (code.length !== 4 || busy) return
     setBusy(true); setCodeErr('')
-    const ok = await B.verifyKioskCode(code)
-    if (!ok) {
+    const out = await B.verifyKioskCode(code)
+    if (!out || !out.ok) {
       setBusy(false); setCode('')
       setCodeErr(live ? 'That code didn’t match — check with the front office' : 'Enter facilitator code 0000 to open')
       return
@@ -195,8 +189,10 @@ export default function VisitorKiosk({ live, onExit }) {
     const onSite = rows.filter((r) => !r.out).length
     return (
       <div className="scroll fade cholla-scroll">
-        <div className="section-title">Visitor check-in</div>
+        <div className="section-title">Community check-in</div>
         <div className="section-sub">Welcome to Cholla · {onSite} visitor{onSite === 1 ? '' : 's'} on site now</div>
+
+        <PreregQueue today={S.todayISO()} live={live} onConfirmed={refresh} />
 
         <div style={{ marginTop: 16 }}>
           <Seg options={['Check in', 'Check out']} value={mode === 'in' ? 'Check in' : 'Check out'}
@@ -270,7 +266,7 @@ export default function VisitorKiosk({ live, onExit }) {
   const begin = code.length === 4 && !busy
   return (
     <div className="scroll fade cholla-scroll">
-      <div className="kiosk-title">Visitor station setup</div>
+      <div className="kiosk-title">Community check-in setup</div>
       <div className="kiosk-block">
         <span className="lab">Facilitator code</span>
         <div className="codedots">
@@ -293,7 +289,7 @@ export default function VisitorKiosk({ live, onExit }) {
       </div>
       <button className="btn" style={{ marginTop: 16, background: begin ? '#BE6A45' : '#D8C3B8', boxShadow: begin ? '0 12px 24px -10px rgba(190,106,69,.65)' : 'none' }}
         disabled={!begin} onClick={unlock}>
-        {busy ? 'Verifying…' : 'Open visitor check-in'}
+        {busy ? 'Verifying…' : 'Open community check-in'}
       </button>
       <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={onExit}>Switch check-in area</button>
       {!live && <div className="muted" style={{ textAlign: 'center', font: '500 12px Inter', marginTop: 12 }}>Preview facilitator code: 0 0 0 0</div>}

@@ -46,7 +46,7 @@ function kioskDateAllowed(date) {
 // kiosk code gets current-day access only, everyone else is turned away.
 async function doorAccess(request, context, date) {
   if (await isStaff(request)) return null
-  if (hasValidKioskCode(request, context)) {
+  if (await hasValidKioskCode(request, context)) {
     if (!kioskDateAllowed(date)) {
       return json(403, { error: 'The kiosk can only access the current day' })
     }

@@ -1,12 +1,16 @@
 // Client roster management — the clinic's master client list.
 //
-//   GET  /api/clients                 — staff: the full list. Kiosk code: MUST
+//   GET  /api/clients                 — leader/admin: the full list.
+//                                       Facilitators: ONLY the clients of their
+//                                       own assigned groups. Kiosk code: MUST
 //                                       scope with ?session&n and receives only
 //                                       that group's ACTIVE clients (id + name),
 //                                       mirroring its roster access.
-//   POST /api/clients                 — leader/admin: bulk or single add with
-//                                       case-insensitive dedupe (duplicates are
-//                                       reported, never silently double-added)
+//   POST /api/clients                 — leader/admin anywhere; facilitators may
+//                                       add too, but only INTO their own groups.
+//                                       Bulk or single add with case-insensitive
+//                                       dedupe (duplicates are reported, never
+//                                       silently double-added)
 //   POST /api/clients/{id}            — leader/admin: rename, (re/un)assign to
 //                                       a session+group, activate/deactivate
 //                                       (soft delete — client rows are PHI and
@@ -27,8 +31,8 @@ const {
   cleanString,
   isValidId,
 } = require('../lib/util')
-const { isStaff, requireLeader, hasValidKioskCode } = require('../lib/auth')
-const { clientsTable, findGroupBySessionN } = require('../lib/storage')
+const { requireStaff, requireLeader, hasValidKioskCode } = require('../lib/auth')
+const { clientsTable, findGroupBySessionN, listGroupsForFacilitatorEmail } = require('../lib/storage')
 
 const PK = 'client'
 const MAX_BULK = 500
@@ -79,6 +83,10 @@ function cleanName(raw) {
   return name
 }
 
+function inGroups(list, session, n) {
+  return list.some((g) => g.session === session && g.n === n)
+}
+
 // Validate an assignment. Returns { session, n } (nulls = unassigned) or
 // { error }. Group must actually exist in the org schedule.
 async function cleanAssignment(session, n) {
@@ -98,13 +106,23 @@ app.http('clients-get', {
   authLevel: 'anonymous',
   route: 'clients',
   handler: guard(async (request, context) => {
-    if (await isStaff(request)) {
-      return json(200, { clients: await listClients() })
+    const who = await requireStaff(request)
+    if (!who.status) {
+      if (['leader', 'admin'].includes(who.role)) {
+        return json(200, { clients: await listClients() })
+      }
+      // Facilitators see ONLY the clients assigned to their own groups —
+      // the roster surface they run, nothing clinic-wide.
+      const own = await listGroupsForFacilitatorEmail(who.email)
+      const clients = own.length
+        ? (await listClients()).filter((c) => c.session && inGroups(own, c.session, c.n))
+        : []
+      return json(200, { clients })
     }
     // Kiosk: only the active clients of ONE group, so the tablet can match
     // and pre-fill names for the group it is running — same visibility it
     // already has through that group's roster.
-    if (hasValidKioskCode(request, context)) {
+    if (await hasValidKioskCode(request, context)) {
       const session = request.query.get('session')
       const n = Number(request.query.get('n'))
       if (!SESSIONS.includes(session) || !Number.isInteger(n) || n < 1 || n > GROUPS_PER_SESSION) {
@@ -124,8 +142,19 @@ app.http('clients-create', {
   authLevel: 'anonymous',
   route: 'clients',
   handler: guard(async (request) => {
-    const who = await requireLeader(request)
+    // Leadership adds anywhere. Facilitators may ALSO add clients (single or
+    // bulk) — but only assigned into their OWN groups, never unassigned and
+    // never into someone else's group. (Owner-flagged split: see release
+    // notes — leadership manages the master list, facilitators add.)
+    const who = await requireStaff(request)
     if (who.status) return who
+    let ownGroups = null
+    if (!['leader', 'admin'].includes(who.role)) {
+      ownGroups = await listGroupsForFacilitatorEmail(who.email)
+      if (!ownGroups.length) {
+        return json(403, { error: 'Your account is not linked to a facilitator with assigned groups' })
+      }
+    }
 
     const body = await readJson(request)
     if (!body || !Array.isArray(body.entries)) {
@@ -158,6 +187,12 @@ app.http('clients-create', {
         const a = await cleanAssignment(entry.session, entry.n)
         if (a.error) return json(400, { error: a.error })
         assignment = a
+      }
+      if (ownGroups) {
+        // Facilitator path: every entry must land in one of their own groups.
+        if (!assignment.session || !inGroups(ownGroups, assignment.session, assignment.n)) {
+          return json(403, { error: 'Facilitators can only add clients into their own assigned groups' })
+        }
       }
 
       const record = { id: newClientId(), name, ...assignment, active: true }

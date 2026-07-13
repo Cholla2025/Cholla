@@ -53,7 +53,7 @@ function kioskDateAllowed(date) {
 // is turned away.
 async function rosterAccess(request, context, date) {
   if (await isStaff(request)) return null
-  if (hasValidKioskCode(request, context)) {
+  if (await hasValidKioskCode(request, context)) {
     if (!kioskDateAllowed(date)) {
       return json(403, { error: 'The kiosk can only access the current day' })
     }
@@ -69,23 +69,49 @@ app.http('rosters-get', {
   handler: guard(async (request, context) => {
     const date = request.query.get('date')
     if (!isValidDate(date)) return json(400, { error: 'date query parameter must be YYYY-MM-DD' })
-    const denied = await rosterAccess(request, context, date)
-    if (denied) return denied
 
-    const client = await rostersTable()
-    const rosters = {}
-    const iter = client.listEntities({
-      queryOptions: { filter: odata`PartitionKey eq ${date}` },
-    })
-    for await (const e of iter) {
-      try {
-        const rows = JSON.parse(e.rows)
-        if (Array.isArray(rows)) rosters[e.rowKey] = rows
-      } catch (err) {
-        context.warn('[cholla-api] skipping unreadable roster ' + date + '/' + e.rowKey)
+    if (await isStaff(request)) {
+      const client = await rostersTable()
+      const rosters = {}
+      const iter = client.listEntities({
+        queryOptions: { filter: odata`PartitionKey eq ${date}` },
+      })
+      for await (const e of iter) {
+        try {
+          const rows = JSON.parse(e.rows)
+          if (Array.isArray(rows)) rosters[e.rowKey] = rows
+        } catch (err) {
+          context.warn('[cholla-api] skipping unreadable roster ' + date + '/' + e.rowKey)
+        }
       }
+      return json(200, { rosters })
     }
-    return json(200, { rosters })
+
+    // Kiosk: ONE group at a time. The unlocked tablet is scoped to the group
+    // it is running — it never receives another group's roster rows.
+    if (await hasValidKioskCode(request, context)) {
+      if (!kioskDateAllowed(date)) {
+        return json(403, { error: 'The kiosk can only access the current day' })
+      }
+      const session = request.query.get('session')
+      const n = Number(request.query.get('n'))
+      if (!isValidSession(session) || !isValidN(n)) {
+        return json(400, { error: 'The kiosk must request one group: ?session=Morning&n=1' })
+      }
+      const client = await rostersTable()
+      const rowKey = session + '-' + n
+      let rows = []
+      try {
+        const e = await client.getEntity(date, rowKey)
+        const parsed = JSON.parse(e.rows)
+        if (Array.isArray(parsed)) rows = parsed
+      } catch (err) {
+        if (err && err.statusCode !== 404 && !(err instanceof SyntaxError)) throw err
+      }
+      return json(200, { rosters: { [rowKey]: rows } })
+    }
+
+    return json(401, { error: 'Sign in as staff or unlock the kiosk to access rosters' })
   }),
 })
 

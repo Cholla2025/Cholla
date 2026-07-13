@@ -7,6 +7,7 @@ import DoorKiosk from './screens/DoorKiosk'
 import Staff from './screens/Staff'
 import Leader from './screens/Leader'
 import Settings from './screens/Settings'
+import AdminPortal from './screens/AdminPortal'
 import SignIn from './screens/SignIn'
 
 // Client check-in is for phones/tablets; the dashboards are desktop-only. We
@@ -51,11 +52,13 @@ const ALL_TABS = [
   { key: 'staff', label: 'Facilitator Dashboard', go: 'goStaff' },
   { key: 'leader', label: 'Leadership', go: 'goLeader' },
   { key: 'settings', label: 'Settings', go: 'goSettings' },
+  { key: 'adminportal', label: 'Admin', go: 'goAdmin' },
 ]
 const DESK_HINTS = {
   staff: 'Authenticated · live session roster',
   leader: 'Authenticated · roll-up & day-of settings',
   settings: 'Authenticated · profile, team & access',
+  adminportal: 'Administrator · global controls',
 }
 
 function Footer() {
@@ -154,6 +157,7 @@ export default function App() {
           {surface === 'staff' && <Staff store={store} />}
           {surface === 'leader' && <Leader store={store} />}
           {surface === 'settings' && <Settings store={store} />}
+          {surface === 'adminportal' && <AdminPortal store={store} />}
         </div>
         <Footer />
       </main>

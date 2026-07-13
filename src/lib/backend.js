@@ -51,7 +51,7 @@ export async function initBackend() {
 export const ACCESS = {
   facilitator: ['staff', 'settings'],
   leader: ['staff', 'leader', 'settings'],
-  admin: ['staff', 'leader', 'settings'],
+  admin: ['staff', 'leader', 'settings', 'adminportal'],
 }
 
 export function canAccess(role, surface) {
@@ -296,4 +296,19 @@ export async function saveDoorRow(date, row) {
   if (!live) return null
   const out = await api('/frontdoor/row', { method: 'POST', body: JSON.stringify({ date, row }) })
   return out && Array.isArray(out.rows) ? out.rows : null
+}
+
+// ---------------------------------------------------------------------------
+// Reports & alerts (leader/admin). Previews return the same HTML the emailed
+// report uses; send-now goes to the REPORT_EMAILS recipients immediately.
+// ---------------------------------------------------------------------------
+
+export async function previewReport(period, date) {
+  if (!live) return null
+  return api('/reports/preview?period=' + encodeURIComponent(period) + (date ? '&date=' + encodeURIComponent(date) : ''))
+}
+
+export async function sendReportNow(period, date) {
+  if (!live) return { ok: true, wouldSend: ['(demo mode — nothing sent)'] }
+  return api('/reports/send', { method: 'POST', body: JSON.stringify(date ? { period, date } : { period }) })
 }

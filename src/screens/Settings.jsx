@@ -10,10 +10,10 @@ import { OrgSettings } from './Leader'
 //   admin      — full account management incl. leader/admin roles, plus the
 //                platform panel (kiosk code & app-setting reference)
 
-const ROLE_LABELS = { facilitator: 'Facilitator', leader: 'Leader', admin: 'Admin' }
+export const ROLE_LABELS = { facilitator: 'Facilitator', leader: 'Leader', admin: 'Admin' }
 const ROLE_COLORS = { facilitator: ['#E7F0E9', '#1F7A56'], leader: ['#E8EEF9', '#21314F'], admin: ['#F7E9E1', '#BE6A45'] }
 
-function RolePill({ role }) {
+export function RolePill({ role }) {
   const [bg, fg] = ROLE_COLORS[role] || ['#EEF1F6', '#5A6B85']
   return <span className="pill" style={{ background: bg, color: fg, font: '600 11.5px Inter' }}>{ROLE_LABELS[role] || role}</span>
 }
@@ -90,7 +90,8 @@ function Profile({ store }) {
   )
 }
 
-function Accounts({ store, isAdmin }) {
+// Also rendered inside the global Admin Portal with full powers.
+export function Accounts({ store, isAdmin }) {
   const { state: st } = store
   const roleChoices = isAdmin ? ['facilitator', 'leader', 'admin'] : ['facilitator']
   const [list, setList] = useState(null) // null = loading

@@ -34,6 +34,7 @@ const {
   staffFromEntity,
   staffToEntity,
 } = require('../lib/storage')
+const { acsConfigured, sendEmail } = require('../lib/mailer')
 
 const CODE_TTL_MS = 10 * 60 * 1000
 const MAX_VERIFY_ATTEMPTS = 5
@@ -91,31 +92,20 @@ function hashCode(email, code) {
   return crypto.createHash('sha256').update(email + '|' + code + '|' + sessionSecret()).digest('hex')
 }
 
-function acsConfigured() {
-  return Boolean(process.env.ACS_CONNECTION_STRING && process.env.ACS_SENDER)
-}
-
-// Send the code via Azure Communication Services. The require is lazy so a
-// local dev machine without ACS configured never loads the SDK. The code and
-// the message body are deliberately never logged.
+// Send the code via Azure Communication Services (lib/mailer.js — lazy SDK
+// load, nothing logged). The code and the message body stay out of the logs.
 async function sendCodeEmail(email, code) {
-  const { EmailClient } = require('@azure/communication-email')
-  const client = new EmailClient(process.env.ACS_CONNECTION_STRING)
-  const poller = await client.beginSend({
-    senderAddress: process.env.ACS_SENDER,
-    recipients: { to: [{ address: email }] },
-    content: {
-      subject: 'Your Cholla sign-in code',
-      plainText:
-        'Your Cholla sign-in code is: ' + code + '\n\n' +
-        'It expires in 10 minutes. If you did not request this code, you can ignore this email.',
-      html:
-        '<p>Your Cholla sign-in code is:</p>' +
-        '<p style="font-size:28px;font-weight:bold;letter-spacing:4px;margin:16px 0">' + code + '</p>' +
-        '<p>It expires in 10 minutes. If you did not request this code, you can ignore this email.</p>',
-    },
+  await sendEmail({
+    to: [email],
+    subject: 'Your Cholla sign-in code',
+    text:
+      'Your Cholla sign-in code is: ' + code + '\n\n' +
+      'It expires in 10 minutes. If you did not request this code, you can ignore this email.',
+    html:
+      '<p>Your Cholla sign-in code is:</p>' +
+      '<p style="font-size:28px;font-weight:bold;letter-spacing:4px;margin:16px 0">' + code + '</p>' +
+      '<p>It expires in 10 minutes. If you did not request this code, you can ignore this email.</p>',
   })
-  await poller.pollUntilDone()
 }
 
 app.http('auth-request-code', {

@@ -1,12 +1,14 @@
 // Azure Table Storage access, shared by all handlers.
 //
-// Two tables, auto-created on first use:
-//   org     — partitionKey 'group' | 'facilitator', rowKey = id
-//             partitionKey 'staff', rowKey = lowercase email (sign-in accounts)
-//             partitionKey 'logincode', rowKey = lowercase email (hashed
-//             one-time sign-in codes, see functions/auth.js)
-//   rosters — partitionKey = date (YYYY-MM-DD), rowKey = '<session>-<n>',
-//             property `rows` = JSON string of the day's roster
+// Three tables, auto-created on first use:
+//   org       — partitionKey 'group' | 'facilitator', rowKey = id
+//               partitionKey 'staff', rowKey = lowercase email (sign-in accounts)
+//               partitionKey 'logincode', rowKey = lowercase email (hashed
+//               one-time sign-in codes, see functions/auth.js)
+//   rosters   — partitionKey = date (YYYY-MM-DD), rowKey = '<session>-<n>',
+//               property `rows` = JSON string of the day's roster
+//   frontdoor — partitionKey = date (YYYY-MM-DD), rowKey = 'door',
+//               property `rows` = JSON string of the day's front-door log
 //
 // Connection comes from the STORAGE_CONNECTION_STRING app setting, falling
 // back to AzureWebJobsStorage (already present on every Functions app).
@@ -15,6 +17,7 @@ const { TableClient, odata } = require('@azure/data-tables')
 
 const ORG_TABLE = 'org'
 const ROSTERS_TABLE = 'rosters'
+const FRONTDOOR_TABLE = 'frontdoor'
 
 const clients = {}
 const ensured = {}
@@ -53,6 +56,10 @@ function orgTable() {
 
 function rostersTable() {
   return table(ROSTERS_TABLE)
+}
+
+function frontdoorTable() {
+  return table(FRONTDOOR_TABLE)
 }
 
 // ----- entity <-> API shape mapping -----
@@ -190,8 +197,10 @@ async function listGroupsByFacilitator(facilitatorId) {
 module.exports = {
   ORG_TABLE,
   ROSTERS_TABLE,
+  FRONTDOOR_TABLE,
   orgTable,
   rostersTable,
+  frontdoorTable,
   groupFromEntity,
   groupToEntity,
   facilitatorFromEntity,

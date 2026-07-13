@@ -18,6 +18,7 @@ const { TableClient, odata } = require('@azure/data-tables')
 const ORG_TABLE = 'org'
 const ROSTERS_TABLE = 'rosters'
 const FRONTDOOR_TABLE = 'frontdoor'
+const VISITORS_TABLE = 'visitors'
 
 const clients = {}
 const ensured = {}
@@ -60,6 +61,10 @@ function rostersTable() {
 
 function frontdoorTable() {
   return table(FRONTDOOR_TABLE)
+}
+
+function visitorsTable() {
+  return table(VISITORS_TABLE)
 }
 
 // ----- entity <-> API shape mapping -----
@@ -198,9 +203,11 @@ module.exports = {
   ORG_TABLE,
   ROSTERS_TABLE,
   FRONTDOOR_TABLE,
+  VISITORS_TABLE,
   orgTable,
   rostersTable,
   frontdoorTable,
+  visitorsTable,
   groupFromEntity,
   groupToEntity,
   facilitatorFromEntity,

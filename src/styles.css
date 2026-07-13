@@ -245,12 +245,18 @@ a { color: inherit; }
   transition: all .16s;
 }
 
-.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Filter rows — one smooth bar of gently-rounded buttons (matches the
+   Admin panel's segmented switcher), not pills. */
+.chips {
+  display: inline-flex; gap: 4px; flex-wrap: wrap;
+  background: #fff; border: 1px solid var(--line);
+  border-radius: 12px; padding: 4px;
+}
 .chip {
-  border-radius: 999px;
+  border-radius: 9px;
   padding: 7px 13px;
   font: 600 12.5px Inter;
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   background: #fff;
   white-space: nowrap;
 }
@@ -425,6 +431,32 @@ a { color: inherit; }
   text-align: center; font: 700 24px Inter !important;
   letter-spacing: .45em; padding-left: calc(14px + .45em);
 }
+
+/* Kiosk launcher — front page with the three check-in areas. Gently rounded
+   (not pills, not sharp corners), stacked full-width for any device size. */
+.launch-btn {
+  display: flex; flex-direction: column; gap: 4px; text-align: left;
+  width: 100%; margin-top: 12px; padding: 18px 20px;
+  background: #fff; border: 1.5px solid var(--line); border-radius: 14px;
+  box-shadow: 0 10px 24px -18px rgba(33,49,79,.5);
+  transition: border-color .15s ease, transform .1s ease;
+}
+.launch-btn:active { transform: scale(.99); }
+.launch-btn:hover { border-color: #4C84C4; }
+.launch-title { font: 700 17px Inter; color: var(--ink); }
+.launch-sub { font: 500 12.5px Inter; color: var(--muted); }
+
+/* Visitor HIPAA acknowledgment */
+.hipaa-box {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: #F4F7FB; border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; margin-top: 4px; cursor: pointer;
+}
+.hipaa-box input[type="checkbox"] {
+  width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: #21314F;
+}
+.hipaa-box span { font: 500 11.5px/1.55 Inter; color: var(--muted); text-align: left; }
+.hipaa-box b { color: var(--ink); font-size: 12px; }
 
 /* AI assistant */
 .tab-detached { margin-left: 22px; position: relative; }

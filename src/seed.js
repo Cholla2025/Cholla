@@ -186,9 +186,33 @@ export function pillColors(status) {
     'Late': ['#FBEEDD', '#B5742A'],
     'Absent': ['#F7E3E0', '#B14233'],
     'In Facility': ['#E3F3EC', '#1F7A56'],
+    'On Site': ['#E3F3EC', '#1F7A56'],
     'Departed': ['#E8ECF3', '#3A4A66'],
   }
   return M[status] || ['#eee', '#333']
+}
+
+// Demo visitor log — fictional non-client visitors for the Visitors panel.
+export function defaultVisitors() {
+  const rows = [
+    { first: 'Jordan', last: 'Ellis', company: 'Desert Sky Supplies', visiting: 'Ruth Okafor, Clinical Director', reason: 'Vendor / delivery' },
+    { first: 'Priya', last: 'Natarajan', company: 'Maricopa Health Partners', visiting: 'R. Okafor, LPC', reason: 'Meeting' },
+    { first: 'Sam', last: 'Whitaker', company: 'Family', visiting: '', reason: 'Graduation' },
+  ]
+  return rows.map((r, i) => {
+    const inMin = 9 * 60 + 5 + i * 42
+    const out = i === 0 ? fmtClock(inMin + 35) : null
+    return {
+      id: 'v' + (100 + i),
+      ...r,
+      phone: '(602) 555-01' + (10 + i),
+      email: i === 1 ? 'p.natarajan@example.org' : '',
+      hipaa: true,
+      in: fmtClock(inMin),
+      out,
+      status: out ? 'Departed' : 'On Site',
+    }
+  })
 }
 
 // Demo front-door log — fictional walk-ins for the facility panel and door

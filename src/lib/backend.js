@@ -314,6 +314,44 @@ export async function sendReportNow(period, date) {
 }
 
 // ---------------------------------------------------------------------------
+// Visitor log — non-client, non-staff people on site. Separate table, same
+// access rules and midnight reset as the front-door log.
+// ---------------------------------------------------------------------------
+
+export async function fetchVisitorRows(date) {
+  if (!live) return null
+  try {
+    const out = await api('/visitors?date=' + encodeURIComponent(date))
+    return out && Array.isArray(out.rows) ? out.rows : []
+  } catch (err) {
+    console.warn('[cholla] could not load visitor log:', err.message)
+    return null
+  }
+}
+
+export async function saveVisitorRow(date, row) {
+  if (!live) return null
+  const out = await api('/visitors/row', { method: 'POST', body: JSON.stringify({ date, row }) })
+  return out && Array.isArray(out.rows) ? out.rows : null
+}
+
+// Autocomplete data for the visitor form: recent companies + the staff /
+// facilitator directory (the Microsoft-backed accounts) for "visiting".
+export async function fetchVisitorOptions() {
+  if (!live) {
+    return {
+      companies: ['Desert Sky Supplies', 'Maricopa Health Partners', 'Family'],
+      people: ['D. Alvarez, LISAC', 'R. Okafor, LPC', 'Ruth Okafor, Clinical Director', 'S. Tran, LCSW'],
+    }
+  }
+  try {
+    return await api('/visitors/options')
+  } catch {
+    return { companies: [], people: [] }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // AI assistant (leader/admin). The server builds the model's context from
 // de-identified aggregates only — client names never reach the AI.
 // ---------------------------------------------------------------------------

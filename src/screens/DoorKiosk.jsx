@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as S from '../seed'
 import * as B from '../lib/backend'
-import { Seg } from '../ui'
+import { Seg, noAutofill } from '../ui'
 
 // Front-door kiosk — the tablet at the facility entrance. Clients check in
 // (and out) with just their name; no group, no session. A facilitator unlocks
@@ -18,7 +18,7 @@ function nowClock() {
   return S.fmtClock(d.getHours() * 60 + d.getMinutes())
 }
 
-export default function DoorKiosk({ live }) {
+export default function DoorKiosk({ live, onExit }) {
   const [step, setStep] = useState('lock') // lock | entry | confirm
   const [code, setCode] = useState('')
   const [codeErr, setCodeErr] = useState('')
@@ -141,7 +141,7 @@ export default function DoorKiosk({ live }) {
 
         <div className="card" style={{ marginTop: 16 }}>
           <span className="lab">Enter your name to check {word}</span>
-          <input className="input" value={entry}
+          <input className="input" {...noAutofill()} value={entry}
             onChange={(e) => { setEntry(e.target.value.replace(/[^A-Za-z .'-]/g, '').slice(0, 40)); setErr('') }}
             placeholder="First and last name" autoFocus />
           {err && <div style={{ color: '#B14233', font: '600 12.5px Inter', marginTop: 10 }}>{err}</div>}
@@ -151,7 +151,7 @@ export default function DoorKiosk({ live }) {
           </button>
         </div>
 
-        <button className="btn btn-ghost" style={{ marginTop: 14 }} onClick={relock}>Lock kiosk</button>
+        <button className="btn btn-ghost" style={{ marginTop: 14 }} onClick={onExit || relock}>Switch check-in area</button>
       </div>
     )
   }
@@ -185,6 +185,7 @@ export default function DoorKiosk({ live }) {
         disabled={!begin} onClick={unlock}>
         {busy ? 'Verifying…' : 'Open front-door check-in'}
       </button>
+      {onExit && <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={onExit}>Switch check-in area</button>}
       {!live && <div className="muted" style={{ textAlign: 'center', font: '500 12px Inter', marginTop: 12 }}>Preview facilitator code: 0 0 0 0</div>}
     </div>
   )

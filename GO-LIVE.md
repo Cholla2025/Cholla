@@ -273,6 +273,8 @@ Copy the output — that's your `SESSION_SECRET`.
 | `REPORTS_TRIGGER_SECRET` | Long random string the report scheduler presents (`openssl rand -base64 32`) — also stored as a GitHub repo secret in Phase 8.5. | **Required** for scheduled reports |
 | `ALERT_DROP_PCT` | Steady 2-day attendance drop (%) that triggers a Volume Alert. | Optional (default 5) |
 | `ALERT_CRITICAL_PCT` | Drop (%) above which the alert is marked CRITICAL. | Optional (default 10) |
+| `ANTHROPIC_API_KEY` | Claude API key for the in-app **AI** tab (leadership analytics Q&A). Until set, the AI tab shows a friendly not-configured message. The AI receives ONLY de-identified aggregates — client names never leave the API. | Optional |
+| `ANTHROPIC_MODEL` | Optional model override for the AI tab. | Optional (default `claude-opus-4-8`) |
 
 - [ ] All eight required settings added, values pasted with no stray
   spaces or quotes, **Apply** clicked.

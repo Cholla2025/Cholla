@@ -50,8 +50,8 @@ export async function initBackend() {
 
 export const ACCESS = {
   facilitator: ['staff', 'settings'],
-  leader: ['staff', 'leader', 'settings'],
-  admin: ['staff', 'leader', 'settings', 'adminportal'],
+  leader: ['staff', 'leader', 'settings', 'ai'],
+  admin: ['staff', 'leader', 'settings', 'adminportal', 'ai'],
 }
 
 export function canAccess(role, surface) {
@@ -311,4 +311,24 @@ export async function previewReport(period, date) {
 export async function sendReportNow(period, date) {
   if (!live) return { ok: true, wouldSend: ['(demo mode — nothing sent)'] }
   return api('/reports/send', { method: 'POST', body: JSON.stringify(date ? { period, date } : { period }) })
+}
+
+// ---------------------------------------------------------------------------
+// AI assistant (leader/admin). The server builds the model's context from
+// de-identified aggregates only — client names never reach the AI.
+// ---------------------------------------------------------------------------
+
+export async function askAi(question, history) {
+  if (!live) {
+    await new Promise((r) => setTimeout(r, 400))
+    return {
+      answer:
+        'Preview build — the live assistant answers from your real attendance data once the backend and its API key are connected. A real answer looks like this:\n\n' +
+        '**Attendance is up 6.4% this week** (312 group check-ins vs 293 last week).\n\n' +
+        '| Group | This week | Last week | Trend |\n|---|---|---|---|\n| Morning 3 | 58 | 49 | ▲ +18% |\n| Afternoon 1 | 44 | 47 | ▼ −6% |\n| Afternoon 7 | 31 | 38 | ▼ −18% |\n\n' +
+        'Afternoon 7 has declined two days running — it will trigger a Volume Alert if the slide continues.',
+      model: 'preview',
+    }
+  }
+  return api('/ai/ask', { method: 'POST', body: JSON.stringify(history && history.length ? { question, history } : { question }) })
 }

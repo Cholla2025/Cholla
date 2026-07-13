@@ -8,6 +8,7 @@ import Staff from './screens/Staff'
 import Leader from './screens/Leader'
 import Settings from './screens/Settings'
 import AdminPortal from './screens/AdminPortal'
+import Assistant from './screens/Assistant'
 import SignIn from './screens/SignIn'
 
 // Client check-in is for phones/tablets; the dashboards are desktop-only. We
@@ -53,12 +54,15 @@ const ALL_TABS = [
   { key: 'leader', label: 'Leadership', go: 'goLeader' },
   { key: 'settings', label: 'Settings', go: 'goSettings' },
   { key: 'adminportal', label: 'Admin', go: 'goAdmin' },
+  // Set apart from the management tabs with a visual gap (detached: true).
+  { key: 'ai', label: 'AI', go: 'goAi', detached: true },
 ]
 const DESK_HINTS = {
   staff: 'Authenticated · live session roster',
   leader: 'Authenticated · roll-up & day-of settings',
   settings: 'Authenticated · profile, team & access',
   adminportal: 'Administrator · global controls',
+  ai: 'Claude · aggregate data only',
 }
 
 function Footer() {
@@ -140,7 +144,8 @@ export default function App() {
         <img src={logoUrl} alt="Cholla" className="desk-logo" />
         <nav className="desk-tabs">
           {tabs.map((t) => (
-            <button key={t.key} onClick={a[t.go]} className={surface === t.key ? 'active' : ''}>
+            <button key={t.key} onClick={a[t.go]}
+              className={(surface === t.key ? 'active' : '') + (t.detached ? ' tab-detached' : '')}>
               {t.label}
             </button>
           ))}
@@ -157,6 +162,7 @@ export default function App() {
           {surface === 'leader' && <Leader store={store} />}
           {surface === 'settings' && <Settings store={store} />}
           {surface === 'adminportal' && <AdminPortal store={store} />}
+          {surface === 'ai' && <Assistant store={store} />}
         </div>
         <Footer />
       </main>

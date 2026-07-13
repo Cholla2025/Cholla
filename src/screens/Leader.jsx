@@ -2,8 +2,9 @@ import { useState } from 'react'
 import * as S from '../seed'
 import { Seg, Chips, Kpi, Pill, Badge, ActionButton, Field, Empty } from '../ui'
 import FrontDoor from './FrontDoor'
+import Clients from './Clients'
 
-const LEADER_VIEWS = { Overview: 'overview', 'Front door': 'door', 'Day-of settings': 'settings' }
+const LEADER_VIEWS = { Overview: 'overview', 'Front door': 'door', Clients: 'clients', 'Day-of settings': 'settings' }
 
 export default function Leader({ store }) {
   const { state: st, actions: a } = store
@@ -13,12 +14,13 @@ export default function Leader({ store }) {
     <div className="scroll fade cholla-scroll">
       <div className="section-title">Leadership overview</div>
       <div className="section-sub">{st.leaderName} · {st.todayLabel}</div>
-      <div style={{ marginTop: 14, maxWidth: 520 }}>
+      <div style={{ marginTop: 14, maxWidth: 640 }}>
         <Seg options={Object.keys(LEADER_VIEWS)} value={viewLabel}
           onChange={(o) => a.setLeaderView(LEADER_VIEWS[o])} />
       </div>
       {st.leaderView === 'settings' ? <OrgSettings store={store} />
         : st.leaderView === 'door' ? <FrontDoor store={store} />
+        : st.leaderView === 'clients' ? <Clients store={store} />
         : <Overview store={store} />}
     </div>
   )

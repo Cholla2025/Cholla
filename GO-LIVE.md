@@ -418,9 +418,18 @@ Per tablet, about 5 minutes:
    Each area unlocks with the facilitator day code, and **switching areas
    relocks the device** — so the code is also the gate for changing modes.
    (`?door=1` still pre-selects the member site check-in for entrance
-   tablets; `?door=0` unpins.) The `visitors` table auto-creates like the
-   others — nothing to build by hand. Browser autofill is suppressed on
-   all kiosk name fields so previous entries never pop up as suggestions.
+   tablets; `?door=0` unpins.) The `visitors` and `clients` tables
+   auto-create like the others — nothing to build by hand. Browser
+   autofill is suppressed on all kiosk name fields so previous entries
+   never pop up as suggestions.
+
+   **Client list (Leadership → Clients):** leaders/admins manage the
+   clinic's master roster — bulk-paste names (one per line, "First Last"
+   or "Last, First"), confirm a preview with duplicates flagged, then
+   assign each client to a session + group. Assigned clients pre-populate
+   their group's roster as **Expected** on the facilitator dashboard, and
+   the group kiosk recognizes their names at check-in. Deactivation is a
+   soft delete — client records are never hard-deleted from the UI.
 2. [ ] Add it to the home screen so it launches full-screen — Safari:
    Share → **Add to Home Screen**; Chrome: ⋮ → **Add to Home screen**.
 3. [ ] Lock the tablet to the app:

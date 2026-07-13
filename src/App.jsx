@@ -154,6 +154,15 @@ export default function App() {
   const [doorPinned] = useState(readDoorPin)
   const kioskDevice = !isDesktop || kioskPinned || doorPinned
 
+  // Back-button hardening: after sign-out the browser may restore this page
+  // from the back/forward cache with authenticated data still rendered.
+  // Reloading on any bfcache restore re-runs the auth check from scratch.
+  useEffect(() => {
+    const onPageShow = (e) => { if (e.persisted) window.location.reload() }
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
+  }, [])
+
   // Keep the active surface valid for the current device.
   useEffect(() => {
     if (!kioskDevice && st.surface === 'kiosk') a.goStaff()
@@ -203,6 +212,7 @@ export default function App() {
           ))}
         </nav>
         <div className="desk-right">
+          {!st.live && <span className="preview-badge">Preview data · no backend</span>}
           <span className="desk-hint">{DESK_HINTS[surface]}</span>
           {st.live && <button className="desk-reset" onClick={a.signOutUser}>Sign out</button>}
         </div>

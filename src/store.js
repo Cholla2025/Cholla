@@ -18,7 +18,8 @@ function makeInitialState() {
     org: S.defaultOrg(), orgBusy: false, orgErr: '',
     rosterErr: '',
     kSession: S.currentSession(), kGroup: null, kCode: '', kCodeErr: '', kBusy: false,
-    kUnlocked: false, kSaving: false, kErr: '',
+    kUnlocked: false, kSaving: false, kErr: '', kClients: [],
+    clients: S.defaultClients(), clientsBusy: false, clientsErr: '',
     kMode: 'in', kEntry: '', confirm: null,
     staffName: 'Dana Alvarez, LISAC',
     staffGroup: 1, staffSession: S.currentSession(), staffFrom: today, staffTo: today,
@@ -80,15 +81,24 @@ export function useCheckIn() {
         rosters = await B.fetchRosters(S.todayISO())
       }
       const user = await B.getUser()
+      // Staff sessions load the client list for roster pre-population.
+      const clients = live && user ? await B.fetchClients() : null
       if (!alive) return
       const d = new Date()
       set((prev) => {
+        // LIVE MODE NEVER SHOWS DEMO DATA: if the org fetch failed, render an
+        // empty org with an error rather than inheriting the fictional
+        // preview org a fresh device starts with.
         const nextOrg = org && Array.isArray(org.groups)
           ? { groups: sortGroups(org.groups), facilitators: org.facilitators || [] }
-          : prev.org
+          : live
+            ? { groups: [], facilitators: [] }
+            : prev.org
         return {
           live,
           org: nextOrg,
+          orgErr: live && !org ? 'Could not load the schedule — check the connection and reload' : prev.orgErr,
+          clients: live ? (clients || []) : prev.clients,
           rosters: { ...prev.rosters, ...rosters },
           demoMin: live ? d.getHours() * 60 + d.getMinutes() : prev.demoMin,
           staffGroup: reconcileStaffGroup(nextOrg, prev.staffSession, prev.staffGroup),
@@ -96,8 +106,9 @@ export function useCheckIn() {
           authUser: user ? { id: user.id, email: user.email, provider: user.provider } : null,
           authRole: user ? user.role : null,
           authName: user ? user.name : '',
-          staffName: user?.name || prev.staffName,
-          leaderName: user?.name || prev.leaderName,
+          // Live mode never shows the fictional preview staff names.
+          staffName: user?.name || (live ? user?.email || '' : prev.staffName),
+          leaderName: user?.name || (live ? user?.email || '' : prev.leaderName),
         }
       })
     })()
@@ -147,6 +158,8 @@ export function useCheckIn() {
   const adoptSession = async (user) => {
     const org = await B.fetchOrg().catch(() => null)
     const rosters = await B.fetchRosters(S.todayISO())
+    const clients = await B.fetchClients()
+    set({ clients: clients || [] })
     set((prev) => {
       const nextOrg = org && Array.isArray(org.groups)
         ? { groups: sortGroups(org.groups), facilitators: org.facilitators || [] }
@@ -175,6 +188,39 @@ export function useCheckIn() {
       return false
     }
   }
+
+  // ----- client list management (Leadership → Clients) -----
+  const clientsRun = async (fn) => {
+    set({ clientsBusy: true, clientsErr: '' })
+    try {
+      const out = await fn()
+      set({ clientsBusy: false })
+      return out
+    } catch (err) {
+      set({ clientsBusy: false, clientsErr: err.message || 'Action failed' })
+      return null
+    }
+  }
+
+  const sortClients = (list) => list.slice().sort((a, b) => a.name.localeCompare(b.name))
+
+  // Bulk/single add. Returns { added, duplicates, invalid } or null on error.
+  const addClientsBulk = (entries) => clientsRun(async () => {
+    const out = await B.addClients(entries)
+    if (out && out.added && out.added.length) {
+      set((prev) => ({ clients: sortClients([...prev.clients, ...out.added]) }))
+    }
+    return out
+  })
+
+  const updateClientRec = (id, patch) => clientsRun(async () => {
+    const out = await B.updateClient(id, patch)
+    const rec = out && out.client
+    set((prev) => ({
+      clients: sortClients(prev.clients.map((c) => (c.id === id ? { ...c, ...(rec || patch) } : c))),
+    }))
+    return rec || true
+  })
 
   // ----- org management (Leadership → Day-of settings) -----
   const orgRun = async (fn) => {
@@ -247,11 +293,24 @@ export function useCheckIn() {
   })
 
   // ----- roster helpers -----
-  // Live mode never invents clients: a group with no stored roster is empty.
+  // Live mode never invents people — but it DOES pre-populate each group's
+  // roster with the clinic's ASSIGNED clients (from the managed client list)
+  // as "Expected" rows, so facilitators see who should be in the room and
+  // attendance is measured against a real denominator. Kiosk devices carry no
+  // client list (clients loads only for signed-in staff), so this merge is a
+  // no-op there.
   const curRoster = (g, rosters) => {
     const k = S.rosterKey(g)
-    if (rosters[k]) return rosters[k]
-    return ref.current.live ? [] : S.defaultRoster(g)
+    if (!ref.current.live) return rosters[k] || S.defaultRoster(g)
+    const rows = (rosters[k] || []).slice()
+    const haveIds = new Set(rows.map((r) => String(r.id)))
+    const haveNames = new Set(rows.map((r) => r.name.toLowerCase()))
+    for (const c of ref.current.clients) {
+      if (!c.active || c.session !== g.session || c.n !== g.n) continue
+      if (haveIds.has(String(c.id)) || haveNames.has(c.name.toLowerCase())) continue
+      rows.push({ id: c.id, name: c.name, checkin: null, checkout: null, status: 'Expected' })
+    }
+    return rows
   }
   const getRoster = (g) => (g ? curRoster(g, ref.current.rosters) : [])
   const stats = (g) => S.statsOf(getRoster(g))
@@ -347,12 +406,17 @@ export function useCheckIn() {
       return
     }
     B.setKioskCode(s.kCode)
+    let kClients = []
     if (s.live) {
-      // The kiosk is anonymous until unlocked; now it can read today's rosters.
+      // The kiosk is anonymous until unlocked; now it can read today's
+      // rosters and THIS group's assigned client names (for check-in matching).
       const rosters = await B.fetchRosters(S.todayISO())
+      kClients = (await B.fetchGroupClients(s.kSession, s.kGroup)) || []
       set((prev) => ({ rosters: { ...prev.rosters, ...rosters } }))
+    } else {
+      kClients = S.defaultClients().filter((c) => c.active && c.session === s.kSession && c.n === s.kGroup)
     }
-    set({ kBusy: false, kUnlocked: true, screen: 'kiosk-member', kEntry: '', kErr: '', kMode: 'in' })
+    set({ kBusy: false, kUnlocked: true, kClients, screen: 'kiosk-member', kEntry: '', kErr: '', kMode: 'in' })
   }
   const beginSession2 = () => {
     // Lock the kiosk again between sessions — the day code must be re-entered.
@@ -377,10 +441,13 @@ export function useCheckIn() {
         ? { ...cur[i], checkin: t, checkout: null, status: 'Checked In' }
         : { ...cur[i], checkout: t, status: 'Checked Out' }
     } else {
-      const id = String(1800 + cur.length)
+      // A first-time check-in that matches an assigned client keeps the
+      // client's opaque id, so the roster row and the client record tie up.
+      const assigned = s.kClients.find((c) => c.name.toLowerCase() === q.toLowerCase())
+      const id = assigned ? String(assigned.id) : String(1800 + cur.length)
       row = s.kMode === 'in'
-        ? { id, name: S.titleCase(q), checkin: t, checkout: null, status: 'Checked In' }
-        : { id, name: S.titleCase(q), checkin: null, checkout: t, status: 'Checked Out' }
+        ? { id, name: assigned ? assigned.name : S.titleCase(q), checkin: t, checkout: null, status: 'Checked In' }
+        : { id, name: assigned ? assigned.name : S.titleCase(q), checkin: null, checkout: t, status: 'Checked Out' }
     }
     const conf = { mode: s.kMode, name: S.titleCase(q), group: S.groupLabel(s.kSession, s.kGroup), time: t }
 
@@ -460,6 +527,7 @@ export function useCheckIn() {
     actions: {
       goKiosk, goStaff, goLeader, goSettings, goAdmin, goAi, resetDemo, signOutUser, adoptSession, saveProfile,
       addGroup, removeGroup, assignFacilitator, addFacilitator, removeFacilitator,
+      addClientsBulk, updateClientRec,
       padPressCode, setKSession, beginSession, beginSession2, setKMode, onMemberName, doCheck, nextMember, completeGroup,
       staffSetSession, onStaffGroup, toggleStaffView,
       checkInClient, checkOutClient, markAbsent, onNewName, onNewId, addClient, staffGroupObj,

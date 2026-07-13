@@ -19,6 +19,7 @@ const ORG_TABLE = 'org'
 const ROSTERS_TABLE = 'rosters'
 const FRONTDOOR_TABLE = 'frontdoor'
 const VISITORS_TABLE = 'visitors'
+const CLIENTS_TABLE = 'clients'
 
 const clients = {}
 const ensured = {}
@@ -65,6 +66,10 @@ function frontdoorTable() {
 
 function visitorsTable() {
   return table(VISITORS_TABLE)
+}
+
+function clientsTable() {
+  return table(CLIENTS_TABLE)
 }
 
 // ----- entity <-> API shape mapping -----
@@ -204,10 +209,12 @@ module.exports = {
   ROSTERS_TABLE,
   FRONTDOOR_TABLE,
   VISITORS_TABLE,
+  CLIENTS_TABLE,
   orgTable,
   rostersTable,
   frontdoorTable,
   visitorsTable,
+  clientsTable,
   groupFromEntity,
   groupToEntity,
   facilitatorFromEntity,

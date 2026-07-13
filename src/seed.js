@@ -192,6 +192,18 @@ export function pillColors(status) {
   return M[status] || ['#eee', '#333']
 }
 
+// Demo client list — fictional clients for the Clients management view.
+export function defaultClients() {
+  const names = ['Alex Rivera', 'Jasmine Cole', 'Marcus Webb', 'Nina Patel', 'Owen Fletcher', 'Tessa Nguyen']
+  return names.map((name, i) => ({
+    id: 'demo-c' + i,
+    name,
+    session: i < 4 ? (i % 2 ? 'Afternoon' : 'Morning') : null,
+    n: i < 4 ? (i % 3) + 1 : null,
+    active: i !== 5,
+  }))
+}
+
 // Demo visitor log — fictional non-client visitors for the Visitors panel.
 export function defaultVisitors() {
   const rows = [

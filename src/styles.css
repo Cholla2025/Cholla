@@ -435,6 +435,33 @@ a { color: inherit; }
   letter-spacing: .45em; padding-left: calc(14px + .45em);
 }
 
+/* Client list management */
+textarea.bulk-paste {
+  min-height: 120px; resize: vertical; font: 500 14px/1.6 Inter;
+  padding-top: 10px;
+}
+.preview-list {
+  max-height: 320px; overflow-y: auto; margin-top: 10px;
+  border: 1px solid var(--line); border-radius: 12px;
+}
+.preview-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 14px; font: 500 13.5px Inter; border-bottom: 1px solid #EEF1F6;
+}
+.preview-row:last-child { border-bottom: none; }
+.preview-new { color: var(--ink); }
+.preview-duplicate { color: #B5742A; background: #FBF4E8; }
+.preview-invalid { color: #B14233; background: #FBEFED; text-decoration: line-through; }
+.preview-tag { font: 700 10.5px Inter; text-transform: uppercase; letter-spacing: .06em; }
+.preview-new .preview-tag { color: #1F7A56; }
+
+/* Live-mode banner when the backend is unreachable (preview data showing) */
+.preview-badge {
+  background: #FBF4E8; color: #B5742A; border: 1px solid #EAD9BC;
+  border-radius: 8px; padding: 4px 10px; font: 700 11px Inter;
+  text-transform: uppercase; letter-spacing: .05em; white-space: nowrap;
+}
+
 /* Kiosk launcher — front page with the three check-in areas. Gently rounded
    (not pills, not sharp corners), stacked full-width for any device size. */
 .launch-btn {

@@ -314,6 +314,48 @@ export async function sendReportNow(period, date) {
 }
 
 // ---------------------------------------------------------------------------
+// Client list — the clinic's master roster. Names travel only in request and
+// response BODIES; the update route uses the opaque server-generated id.
+// ---------------------------------------------------------------------------
+
+export async function fetchClients() {
+  if (!live) return null
+  try {
+    const out = await api('/clients')
+    return out && Array.isArray(out.clients) ? out.clients : []
+  } catch (err) {
+    console.warn('[cholla] could not load the client list') // never log names
+    return null
+  }
+}
+
+// Bulk/single add. entries: [{name, session?, n?}]. Returns
+// { added, duplicates, invalid } — duplicates are reported, never re-added.
+export async function addClients(entries) {
+  if (!live) {
+    return { added: entries.map((e, i) => ({ id: 'demo-c' + Date.now() + i, ...e, session: e.session || null, n: e.n || null, active: true })), duplicates: [], invalid: 0 }
+  }
+  return api('/clients', { method: 'POST', body: JSON.stringify({ entries }) })
+}
+
+export async function updateClient(id, patch) {
+  if (!live) return { client: { id, ...patch } }
+  const out = await api('/clients/' + encodeURIComponent(id), { method: 'POST', body: JSON.stringify(patch) })
+  return out
+}
+
+// Kiosk: the active clients of ONE group (post-unlock), for name matching.
+export async function fetchGroupClients(session, n) {
+  if (!live) return null
+  try {
+    const out = await api('/clients?session=' + encodeURIComponent(session) + '&n=' + encodeURIComponent(n))
+    return out && Array.isArray(out.clients) ? out.clients : []
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Visitor log — non-client, non-staff people on site. Separate table, same
 // access rules and midnight reset as the front-door log.
 // ---------------------------------------------------------------------------

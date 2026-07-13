@@ -82,7 +82,10 @@ function Member({ st, a, stats, getRoster, getGroup }) {
   const g = getGroup(st.kSession, st.kGroup)
   const present = g ? stats(g).present : 0
   const q = st.kEntry.trim().toLowerCase()
-  const matched = q.length >= 2 && getRoster(g).some((r) => r.name.toLowerCase() === q)
+  const matched = q.length >= 2 && (
+    getRoster(g).some((r) => r.name.toLowerCase() === q) ||
+    st.kClients.some((c) => c.name.toLowerCase() === q)
+  )
   const word = st.kMode === 'in' ? 'in' : 'out'
   const label = st.kMode === 'in' ? 'Check in' : 'Check out'
   const enabled = st.kEntry.trim().length >= 2 && !st.kSaving

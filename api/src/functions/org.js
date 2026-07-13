@@ -26,7 +26,7 @@ const {
   isValidN,
   isValidId,
 } = require('../lib/util')
-const { isStaff, isLeader } = require('../lib/auth')
+const { isStaff, requireLeader } = require('../lib/auth')
 const {
   orgTable,
   groupFromEntity,
@@ -38,16 +38,6 @@ const {
   getEntity,
   listGroupsByFacilitator,
 } = require('../lib/storage')
-
-function requireLeader(request) {
-  if (!request.headers.get('x-ms-client-principal')) {
-    return json(401, { error: 'Sign in required' })
-  }
-  if (!isLeader(request)) {
-    return json(403, { error: 'Leadership role required' })
-  }
-  return null
-}
 
 function sortGroups(groups) {
   return groups.sort((a, b) => {
@@ -95,7 +85,7 @@ app.http('org-get', {
   authLevel: 'anonymous',
   route: 'org',
   handler: guard(async (request, context) => {
-    const staff = isStaff(request)
+    const staff = await isStaff(request)
     let { groups, facilitators } = await listOrgEntities()
     if (groups.length === 0) {
       groups = await seedGroups(context)
@@ -114,8 +104,8 @@ app.http('org-groups-create', {
   authLevel: 'anonymous',
   route: 'org/groups',
   handler: guard(async (request) => {
-    const denied = requireLeader(request)
-    if (denied) return denied
+    const who = await requireLeader(request)
+    if (who.status) return who
 
     const body = await readJson(request)
     if (!body) return json(400, { error: 'Body must be a JSON object' })
@@ -170,8 +160,8 @@ app.http('org-groups-delete', {
   authLevel: 'anonymous',
   route: 'org/groups/{id}',
   handler: guard(async (request) => {
-    const denied = requireLeader(request)
-    if (denied) return denied
+    const who = await requireLeader(request)
+    if (who.status) return who
 
     const id = request.params.id
     if (!isValidId(id)) return json(400, { error: 'Invalid group id' })
@@ -192,8 +182,8 @@ app.http('org-groups-assign', {
   authLevel: 'anonymous',
   route: 'org/groups/{id}/assign',
   handler: guard(async (request) => {
-    const denied = requireLeader(request)
-    if (denied) return denied
+    const who = await requireLeader(request)
+    if (who.status) return who
 
     const id = request.params.id
     if (!isValidId(id)) return json(400, { error: 'Invalid group id' })
@@ -226,8 +216,8 @@ app.http('org-facilitators-create', {
   authLevel: 'anonymous',
   route: 'org/facilitators',
   handler: guard(async (request) => {
-    const denied = requireLeader(request)
-    if (denied) return denied
+    const who = await requireLeader(request)
+    if (who.status) return who
 
     const body = await readJson(request)
     if (!body) return json(400, { error: 'Body must be a JSON object' })
@@ -267,8 +257,8 @@ app.http('org-facilitators-delete', {
   authLevel: 'anonymous',
   route: 'org/facilitators/{id}',
   handler: guard(async (request) => {
-    const denied = requireLeader(request)
-    if (denied) return denied
+    const who = await requireLeader(request)
+    if (who.status) return who
 
     const id = request.params.id
     if (!isValidId(id)) return json(400, { error: 'Invalid facilitator id' })

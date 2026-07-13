@@ -265,7 +265,7 @@ Copy the output — that's your `SESSION_SECRET`.
 | `AZURE_CLIENT_ID` | Application (client) ID from Phase 3.4 | **Required** for Microsoft sign-in |
 | `AZURE_CLIENT_SECRET` | Client secret value from Phase 3.5 | **Required** for Microsoft sign-in |
 | `SESSION_SECRET` | The `openssl rand -base64 48` output above (any random string of 32+ chars works). Signs email-code sessions. | **Required** for email sign-in |
-| `ADMIN_EMAILS` | Comma-separated bootstrap admin emails, owner first — e.g. `brian@manageai.io`. This is how the FIRST admin gets in before any staff accounts exist. Match the address exactly as you'll type it at sign-in. | **Required** |
+| `ADMIN_EMAILS` | Comma-separated bootstrap admin emails, owner first — e.g. `brian@manageai.io`. This is how the FIRST admin gets in before any staff accounts exist. Matching is case-insensitive; just avoid typos and stray spaces. | **Required** |
 | `ACS_CONNECTION_STRING` | Communication Services connection string from Phase 2.5 | **Required** for email sign-in |
 | `ACS_SENDER` | The verified sender address from Phase 2.3, e.g. `DoNotReply@<your-domain>.azurecomm.net` — copy it exactly | **Required** for email sign-in |
 | `CLINIC_TIMEZONE` | Optional; defaults to `America/Phoenix`. Defines the clinic's calendar day for kiosk roster access. | Optional |
@@ -512,7 +512,7 @@ The consolidated, printable version. Done in order, you are live.
 | **Sign-in code email never arrives** | Work down this list: (1) check spam/junk — sender is `DoNotReply@...azurecomm.net`; (2) the email must exist as an **active** staff account or be in `ADMIN_EMAILS` — non-matching addresses are silently ignored by design; (3) `ACS_SENDER` must exactly match the MailFrom address of the provisioned domain; (4) the domain must be **connected** to the ACS resource (ACS → Email → Domains — is it listed?); (5) `ACS_CONNECTION_STRING` present and unexpired; (6) rate limit — wait a few minutes and request once. |
 | Email sign-in returns **503 "email sign-in not configured"** | `SESSION_SECRET`, `ACS_CONNECTION_STRING`, or `ACS_SENDER` missing from app settings. Add, **Apply**, retry. |
 | "**Account deactivated**" at sign-in | The staff account was deactivated in Settings → Admin. An admin can reactivate it there. |
-| **Admin can't get in** (bootstrap) | `ADMIN_EMAILS` typo or casing/whitespace mismatch with the address being typed at sign-in. Fix the app setting (comma-separated, no stray spaces), **Apply**, request a fresh code. |
+| **Admin can't get in** (bootstrap) | `ADMIN_EMAILS` typo or whitespace mismatch with the address being typed at sign-in (matching ignores upper/lower case). Fix the app setting (comma-separated, no stray spaces), **Apply**, request a fresh code. |
 | Code rejected | Codes expire in 10 minutes and allow 5 attempts — request a fresh one. Repeated requests are rate-limited; wait briefly. |
 | **Microsoft sign-in works but "access pending"** | The Microsoft account's email has no matching **active staff account** (Settings → Admin) AND no SWA Role-management invitation. Add one or the other — the email on the staff account must match the Microsoft account's email. |
 | Microsoft sign-in loops or `AADSTS…` errors | Redirect URI missing/wrong (must end `/.auth/login/aad/callback`), `<YOUR-TENANT-ID>` not replaced in `staticwebapp.config.json`, or `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET` missing/expired. |

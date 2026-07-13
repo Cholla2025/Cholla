@@ -4,6 +4,18 @@
     "FUNCTIONS_WORKER_RUNTIME": "node",
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "STORAGE_CONNECTION_STRING": "UseDevelopmentStorage=true",
-    "KIOSK_CODE": "0000"
+    "KIOSK_CODE": "0000",
+
+    "//SESSION_SECRET": "Signs email sign-in session tokens. Leave empty locally (a dev-only fallback is used); in Azure it MUST be a long random string or email sign-in stays disabled (503).",
+    "SESSION_SECRET": "",
+
+    "//ADMIN_EMAILS": "Comma-separated bootstrap admin addresses that can always sign in with an emailed code, even before any staff records exist.",
+    "ADMIN_EMAILS": "",
+
+    "//ACS_CONNECTION_STRING": "Azure Communication Services connection string used to send the sign-in code emails. Leave empty locally — request-code then returns the code as devCode instead of emailing it.",
+    "ACS_CONNECTION_STRING": "",
+
+    "//ACS_SENDER": "Verified ACS sender address, e.g. DoNotReply@<your-domain>.azurecomm.net.",
+    "ACS_SENDER": ""
   }
 }

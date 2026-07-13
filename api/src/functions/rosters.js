@@ -48,10 +48,11 @@ function kioskDateAllowed(date) {
   return [clinicToday(-1), clinicToday(0), clinicToday(1)].includes(date)
 }
 
-// Resolve who is asking. Staff get full access; a valid kiosk code gets
-// current-day access only; everyone else is turned away.
-function rosterAccess(request, context, date) {
-  if (isStaff(request)) return null
+// Resolve who is asking. Staff (Entra session or email sign-in token) get
+// full access; a valid kiosk code gets current-day access only; everyone else
+// is turned away.
+async function rosterAccess(request, context, date) {
+  if (await isStaff(request)) return null
   if (hasValidKioskCode(request, context)) {
     if (!kioskDateAllowed(date)) {
       return json(403, { error: 'The kiosk can only access the current day' })
@@ -68,7 +69,7 @@ app.http('rosters-get', {
   handler: guard(async (request, context) => {
     const date = request.query.get('date')
     if (!isValidDate(date)) return json(400, { error: 'date query parameter must be YYYY-MM-DD' })
-    const denied = rosterAccess(request, context, date)
+    const denied = await rosterAccess(request, context, date)
     if (denied) return denied
 
     const client = await rostersTable()
@@ -106,7 +107,7 @@ app.http('rosters-row', {
     if (!isValidSession(session)) return json(400, { error: 'session must be one of: ' + SESSIONS.join(', ') })
     if (!isValidN(n)) return json(400, { error: 'n must be an integer of at least 1' })
     if (!isValidDate(date)) return json(400, { error: 'date must be YYYY-MM-DD' })
-    const denied = rosterAccess(request, context, date)
+    const denied = await rosterAccess(request, context, date)
     if (denied) return denied
 
     const cleaned = cleanRosterRows([body.row])
@@ -172,7 +173,7 @@ app.http('rosters-put', {
   authLevel: 'anonymous',
   route: 'rosters',
   handler: guard(async (request, context) => {
-    if (!isStaff(request)) {
+    if (!(await isStaff(request))) {
       return json(401, { error: 'Sign in as staff to replace a roster' })
     }
 

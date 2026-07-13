@@ -1,16 +1,30 @@
 import { useState, useEffect } from 'react'
 import logoUrl from '../Blue Agave Logo.png'
 import { useCheckIn } from './store'
-import { canAccess } from './lib/auth'
+import { canAccess } from './lib/backend'
 import Kiosk from './screens/Kiosk'
 import Staff from './screens/Staff'
 import Leader from './screens/Leader'
-import Admin from './screens/Admin'
 import SignIn from './screens/SignIn'
 
-// Client check-in is phone-only; the dashboards are desktop-only. We switch the
-// entire shell on this breakpoint so neither surface leaks onto the wrong device.
+// Client check-in is for phones/tablets; the dashboards are desktop-only. We
+// switch the entire shell on this breakpoint so neither surface leaks onto the
+// wrong device. A device can also be pinned to kiosk mode with ?kiosk=1 (and
+// unpinned with ?kiosk=0) — that's how a landscape tablet at the group room
+// door stays a kiosk even though it's wider than the breakpoint.
 const DESKTOP_QUERY = '(min-width: 900px)'
+const KIOSK_PIN_KEY = 'cholla-kiosk-pin'
+
+function readKioskPin() {
+  try {
+    const q = new URLSearchParams(window.location.search).get('kiosk')
+    if (q === '1' || q === 'true') localStorage.setItem(KIOSK_PIN_KEY, '1')
+    else if (q === '0' || q === 'false') localStorage.removeItem(KIOSK_PIN_KEY)
+    return localStorage.getItem(KIOSK_PIN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(
@@ -26,14 +40,12 @@ function useIsDesktop() {
 }
 
 const ALL_TABS = [
-  { key: 'staff', label: 'Staff Dashboard', go: 'goStaff' },
+  { key: 'staff', label: 'Facilitator Dashboard', go: 'goStaff' },
   { key: 'leader', label: 'Leadership', go: 'goLeader' },
-  { key: 'admin', label: 'Admin', go: 'goAdmin' },
 ]
 const DESK_HINTS = {
   staff: 'Authenticated · live session roster',
-  leader: 'Authenticated · organization roll-up',
-  admin: 'Administrator · manage groups & staff',
+  leader: 'Authenticated · roll-up & day-of settings',
 }
 
 function Footer() {
@@ -47,20 +59,39 @@ function Footer() {
   )
 }
 
+function AccessPending({ store }) {
+  const { state: st, actions: a } = store
+  return (
+    <div className="signin-wrap">
+      <div className="card" style={{ maxWidth: 420, textAlign: 'center' }}>
+        <img src={logoUrl} alt="Cholla Behavioral Health" style={{ height: 64, margin: '0 auto 14px' }} />
+        <div className="section-title">Access pending</div>
+        <div className="section-sub" style={{ marginTop: 8 }}>
+          You're signed in as {st.authName || 'this account'}, but no dashboard role has been
+          assigned yet. Ask leadership to invite you as a facilitator or leader, then sign in again.
+        </div>
+        <button className="btn btn-ghost" style={{ marginTop: 18 }} onClick={a.signOutUser}>Sign out</button>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const store = useCheckIn()
   const { state: st, actions: a } = store
   const isDesktop = useIsDesktop()
+  const [kioskPinned] = useState(readKioskPin)
+  const kioskDevice = !isDesktop || kioskPinned
 
   // Keep the active surface valid for the current device.
   useEffect(() => {
-    if (isDesktop && st.surface === 'kiosk') a.goStaff()
-    else if (!isDesktop && st.surface !== 'kiosk') a.goKiosk()
+    if (!kioskDevice && st.surface === 'kiosk') a.goStaff()
+    else if (kioskDevice && st.surface !== 'kiosk') a.goKiosk()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDesktop])
+  }, [kioskDevice])
 
-  // ---- MOBILE: client kiosk only (open, no sign-in) ----
-  if (!isDesktop) {
+  // ---- KIOSK DEVICE: client check-in only (open, no sign-in) ----
+  if (kioskDevice) {
     return (
       <div className="app app--mobile">
         <div className="kiosk-header">
@@ -79,6 +110,9 @@ export default function App() {
   }
   if (!st.authUser) {
     return <div className="app app--desktop"><SignIn store={store} /><Footer /></div>
+  }
+  if (!st.authRole) {
+    return <div className="app app--desktop"><AccessPending store={store} /><Footer /></div>
   }
 
   const role = st.authRole
@@ -99,8 +133,8 @@ export default function App() {
         </nav>
         <div className="desk-right">
           <span className="desk-hint">{DESK_HINTS[surface]}</span>
-          <button className="desk-reset" onClick={a.resetDemo}>Reset demo</button>
-          <button className="desk-reset" onClick={a.signOutUser}>Sign out</button>
+          {!st.live && <button className="desk-reset" onClick={a.resetDemo}>Reset demo</button>}
+          {st.live && <button className="desk-reset" onClick={a.signOutUser}>Sign out</button>}
         </div>
       </header>
 
@@ -108,7 +142,6 @@ export default function App() {
         <div className="desk-inner">
           {surface === 'staff' && <Staff store={store} />}
           {surface === 'leader' && <Leader store={store} />}
-          {surface === 'admin' && <Admin store={store} />}
         </div>
         <Footer />
       </main>

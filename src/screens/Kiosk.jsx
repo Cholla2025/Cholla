@@ -4,40 +4,46 @@ import { Seg } from '../ui'
 const PAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Clear', '0', '⌫']
 
 export default function Kiosk({ store }) {
-  const { state: st, set, actions: a, stats, getRoster } = store
+  const { state: st, set, actions: a, stats, getRoster, groupsFor, getGroup } = store
   const { screen } = st
 
   if (screen === 'kiosk-confirm') return <Confirm st={st} a={a} />
-  if (screen === 'kiosk-closeout') return <Closeout st={st} a={a} stats={stats} />
-  if (screen === 'kiosk-member') return <Member st={st} a={a} stats={stats} getRoster={getRoster} />
-  return <Start st={st} set={set} a={a} />
+  if (screen === 'kiosk-closeout') return <Closeout st={st} a={a} stats={stats} getGroup={getGroup} />
+  if (screen === 'kiosk-member') return <Member st={st} a={a} stats={stats} getRoster={getRoster} getGroup={getGroup} />
+  return <Start st={st} set={set} a={a} groupsFor={groupsFor} getGroup={getGroup} />
 }
 
-function Start({ st, set, a }) {
-  const groups = S.GROUPS.filter((g) => g.session === st.kSession)
+function Start({ st, set, a, groupsFor, getGroup }) {
+  const groups = groupsFor(st.kSession)
   const kGroupLabel = st.kGroup ? S.groupLabel(st.kSession, st.kGroup) : 'Select a group above'
-  const begin = st.kCode.length === 4
+  const begin = st.kCode.length === 4 && !!getGroup(st.kSession, st.kGroup) && !st.kBusy
   return (
     <div className="scroll fade cholla-scroll">
       <div className="kiosk-title">Facilitator setup</div>
 
       <div className="kiosk-block">
         <span className="lab">Session time</span>
-        <Seg options={S.SESSIONS} value={st.kSession} onChange={(o) => set({ kSession: o })}
+        <Seg options={S.SESSIONS} value={st.kSession} onChange={a.setKSession}
           activeBg="#4C84C4" />
 
         <div className="lab" style={{ marginTop: 16 }}>Select group</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-          {groups.map((g) => {
-            const sel = g.n === st.kGroup
-            return (
-              <button key={g.n} onClick={() => set({ kGroup: g.n })}
-                style={{ border: '1.5px solid ' + (sel ? '#4C84C4' : '#DCE3EE'), background: sel ? '#4C84C4' : '#fff', color: sel ? '#fff' : '#21314F', borderRadius: 12, padding: '12px 0', font: '600 15px Inter' }}>
-                {g.n}
-              </button>
-            )
-          })}
-        </div>
+        {groups.length === 0 ? (
+          <div className="muted" style={{ font: '500 13px Inter', textAlign: 'center', padding: '14px 0' }}>
+            No groups are set up for the {st.kSession.toLowerCase()} session yet — check with leadership.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+            {groups.map((g) => {
+              const sel = g.n === st.kGroup
+              return (
+                <button key={g.n} onClick={() => set({ kGroup: g.n })}
+                  style={{ border: '1.5px solid ' + (sel ? '#4C84C4' : '#DCE3EE'), background: sel ? '#4C84C4' : '#fff', color: sel ? '#fff' : '#21314F', borderRadius: 12, padding: '12px 0', font: '600 15px Inter' }}>
+                  {g.n}
+                </button>
+              )
+            })}
+          </div>
+        )}
         <div style={{ font: '600 13px Inter', color: st.kGroup ? '#21314F' : '#9AA8BD', marginTop: 12, textAlign: 'center' }}>{kGroupLabel}</div>
       </div>
 
@@ -64,15 +70,15 @@ function Start({ st, set, a }) {
 
       <button className="btn" style={{ marginTop: 16, background: begin ? '#BE6A45' : '#D8C3B8', boxShadow: begin ? '0 12px 24px -10px rgba(190,106,69,.65)' : 'none' }}
         disabled={!begin} onClick={a.beginSession}>
-        Begin session
+        {st.kBusy ? 'Verifying…' : 'Begin session'}
       </button>
-      <div className="muted" style={{ textAlign: 'center', font: '500 12px Inter', marginTop: 12 }}>Demo facilitator code: 0 0 0 0</div>
+      {!st.live && <div className="muted" style={{ textAlign: 'center', font: '500 12px Inter', marginTop: 12 }}>Demo facilitator code: 0 0 0 0</div>}
     </div>
   )
 }
 
-function Member({ st, a, stats, getRoster }) {
-  const g = S.group(st.kSession, st.kGroup)
+function Member({ st, a, stats, getRoster, getGroup }) {
+  const g = getGroup(st.kSession, st.kGroup)
   const present = g ? stats(g).present : 0
   const q = st.kEntry.trim().toLowerCase()
   const matched = q.length >= 2 && getRoster(g).some((r) => r.name.toLowerCase() === q)
@@ -127,10 +133,11 @@ function Confirm({ st, a }) {
   )
 }
 
-function Closeout({ st, a, stats }) {
-  const g = S.group(st.kSession, st.kGroup)
+function Closeout({ st, a, stats, getGroup }) {
+  const g = getGroup(st.kSession, st.kGroup)
   const s = g ? stats(g) : { ci: 0, present: 0 }
-  const range = '1:00 PM – ' + S.fmtClock(st.demoMin)
+  const start = st.kSession === 'Morning' ? '9:00 AM' : '1:00 PM'
+  const range = start + ' – ' + S.fmtClock(st.demoMin)
   return (
     <div className="scroll fade cholla-scroll" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       <div className="section-title" style={{ textAlign: 'center' }}>Session closed</div>

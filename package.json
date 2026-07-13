@@ -3,14 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Cholla Behavioral Health — group check-in & attendance demo (mobile-first, Supabase-backed)",
+  "description": "Cholla Behavioral Health — group check-in & attendance (Azure Static Web Apps + Functions)",
   "scripts": {
     "dev": "vite",
+    "dev:swa": "swa start http://localhost:5173 --run \"vite\" --api-location api",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

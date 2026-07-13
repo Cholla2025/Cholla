@@ -3,7 +3,9 @@
 # environment for every pull request against main.
 #
 # Requires one repository secret: AZURE_STATIC_WEB_APPS_API_TOKEN — the
-# Static Web App's deployment token (see DEPLOYMENT.md, step 4).
+# Static Web App's deployment token (see DEPLOYMENT.md, step 4). Until that
+# secret is added, runs build the app but skip the deploy step instead of
+# failing (skip_deploy_on_missing_secrets).
 
 name: Azure Static Web Apps CI/CD
 
@@ -35,6 +37,7 @@ jobs:
           app_location: '/'
           api_location: 'api'
           output_location: 'dist'
+          skip_deploy_on_missing_secrets: true
 
   close_pull_request:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
@@ -46,3 +49,4 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           action: close
+          skip_deploy_on_missing_secrets: true

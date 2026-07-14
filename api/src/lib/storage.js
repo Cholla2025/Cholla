@@ -20,6 +20,11 @@ const ROSTERS_TABLE = 'rosters'
 const FRONTDOOR_TABLE = 'frontdoor'
 const VISITORS_TABLE = 'visitors'
 const CLIENTS_TABLE = 'clients'
+// Community visitor pre-registrations — SEPARATE from the client tables by
+// design: pre-registration is for non-clients only.
+const PREREG_TABLE = 'prereg'
+// Personal alert subscriptions (per staff user, evaluated at day close).
+const ALERTS_TABLE = 'alertsubs'
 
 const clients = {}
 const ensured = {}
@@ -72,6 +77,14 @@ function clientsTable() {
   return table(CLIENTS_TABLE)
 }
 
+function preregTable() {
+  return table(PREREG_TABLE)
+}
+
+function alertsTable() {
+  return table(ALERTS_TABLE)
+}
+
 // ----- entity <-> API shape mapping -----
 
 function groupFromEntity(e) {
@@ -108,7 +121,11 @@ function facilitatorFromEntity(e, includeEmail) {
     credential: e.credential || '',
     active: e.active !== false,
   }
-  if (includeEmail) f.email = e.email || ''
+  if (includeEmail) {
+    f.email = e.email || ''
+    // Whether a personal kiosk code is set — never the code or its hash.
+    f.hasCode = Boolean(e.codeHash)
+  }
   return f
 }
 
@@ -194,6 +211,25 @@ async function listStaff() {
   return out
 }
 
+// The groups assigned to the facilitator record(s) carrying this email
+// (case-insensitive), as [{session, n}]. Empty when the address is not linked
+// to an active facilitator or the facilitator has no groups. This is how a
+// SIGN-IN identity (staff account) maps onto the org-chart facilitator.
+async function listGroupsForFacilitatorEmail(email) {
+  if (typeof email !== 'string' || !email) return []
+  const { groups, facilitators } = await listOrgEntities()
+  const lower = email.toLowerCase()
+  const mine = new Set(
+    facilitators
+      .filter((f) => f.active !== false && String(f.email || '').toLowerCase() === lower)
+      .map((f) => f.rowKey)
+  )
+  if (!mine.size) return []
+  return groups
+    .filter((g) => g.facilitatorId && mine.has(g.facilitatorId))
+    .map((g) => ({ session: g.session, n: Number(g.n), name: g.name }))
+}
+
 async function listGroupsByFacilitator(facilitatorId) {
   const client = await orgTable()
   const out = []
@@ -210,11 +246,15 @@ module.exports = {
   FRONTDOOR_TABLE,
   VISITORS_TABLE,
   CLIENTS_TABLE,
+  PREREG_TABLE,
+  ALERTS_TABLE,
   orgTable,
   rostersTable,
   frontdoorTable,
   visitorsTable,
   clientsTable,
+  preregTable,
+  alertsTable,
   groupFromEntity,
   groupToEntity,
   facilitatorFromEntity,
@@ -227,4 +267,5 @@ module.exports = {
   getStaffByEmail,
   listStaff,
   listGroupsByFacilitator,
+  listGroupsForFacilitatorEmail,
 }

@@ -1,15 +1,27 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import * as S from '../seed'
 import { Seg, Chips, Kpi, Pill, ActionButton, Field, Empty } from '../ui'
-import FrontDoor from './FrontDoor'
 
 const STATUS_FILTERS = ['All', 'Checked In', 'Checked Out', 'Expected', 'Late', 'Absent']
 
 export default function Staff({ store }) {
-  const { state: st, set, actions: a, getRoster, groupsFor, getGroup, facLabelFor } = store
-  const [area, setArea] = useState('Group roster')
-  const groupOptions = groupsFor(st.staffSession)
-  const g = st.staffGroup == null ? undefined : getGroup(st.staffSession, st.staffGroup)
+  const { state: st, set, actions: a, getRoster, getGroup, facLabelFor, myGroups, myGroupsFor } = store
+  // Facilitators are auto-scoped to their OWN assigned groups (matched from
+  // their account email to their facilitator record); leadership sees all.
+  const isFacilitator = st.authRole === 'facilitator'
+  const scopedAll = myGroups()
+  const groupOptions = myGroupsFor(st.staffSession)
+  let g = st.staffGroup == null ? undefined : getGroup(st.staffSession, st.staffGroup)
+  if (isFacilitator && g && !groupOptions.some((x) => x.n === g.n)) g = undefined
+
+  // Keep the selection inside the facilitator's own groups.
+  useEffect(() => {
+    if (!isFacilitator) return
+    if (g || !scopedAll.length) return
+    const first = groupOptions[0] || scopedAll[0]
+    if (first) set({ staffSession: first.session, staffGroup: first.n })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFacilitator, g, scopedAll.length])
   const inRange = S.rangeHasToday(st.staffFrom, st.staffTo)
   const base = !g || !inRange || st.staffView === 'empty' ? [] : getRoster(g)
 
@@ -42,13 +54,20 @@ export default function Staff({ store }) {
   return (
     <div className="scroll fade cholla-scroll">
       <div className="section-title">Facilitator dashboard</div>
-      <div className="section-sub">{st.staffName} · {st.todayLabel}</div>
-
-      <div style={{ marginTop: 14, maxWidth: 380 }}>
-        <Seg options={['Group roster', 'Front door']} value={area} onChange={setArea} />
+      <div className="section-sub">
+        {st.staffName} · {st.todayLabel}
+        {isFacilitator ? ' · your assigned groups' : ''}
       </div>
 
-      {area === 'Front door' ? <FrontDoor store={store} /> : (<>
+      {isFacilitator && !scopedAll.length ? (
+        <div className="card" style={{ marginTop: 16 }}>
+          <Empty title="No groups linked to your account">
+            Your sign-in email isn't linked to a facilitator with assigned
+            groups yet — ask leadership to add you as a facilitator (with this
+            email) and assign your group in Settings.
+          </Empty>
+        </div>
+      ) : (<>
 
       <div style={{ marginTop: 16 }}>
         <Seg options={S.SESSIONS} value={st.staffSession} onChange={a.staffSetSession} activeBg="#4C84C4" inactiveFg="#7A8AA3" />

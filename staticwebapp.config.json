@@ -33,9 +33,12 @@
     "identityProviders": {
       "azureActiveDirectory": {
         "registration": {
-          "openIdIssuer": "https://login.microsoftonline.com/<YOUR-TENANT-ID>/v2.0",
+          "openIdIssuer": "https://login.microsoftonline.com/83e66084-342d-470d-9551-04af0d97f850/v2.0",
           "clientIdSettingName": "AZURE_CLIENT_ID",
           "clientSecretSettingName": "AZURE_CLIENT_SECRET"
+        },
+        "login": {
+          "loginParameters": ["domain_hint=chollabehavioralhealth.com"]
         }
       }
     }

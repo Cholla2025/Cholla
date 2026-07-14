@@ -3,10 +3,10 @@ import * as S from '../seed'
 import * as B from '../lib/backend'
 import { Seg, noAutofill } from '../ui'
 
-// Front-door kiosk — the tablet at the facility entrance. Clients check in
-// (and out) with just their name; no group, no session. A facilitator unlocks
-// it each morning with the same day code as the group kiosks. Pin a device to
-// this surface with ?door=1.
+// Member Check-In kiosk — the tablet at the facility entrance. Clients check
+// in (and out) with just their name; no group, no session. A facilitator
+// unlocks it each morning with their personal kiosk code (same as the group
+// kiosks). Pin a device to this surface with ?door=1.
 //
 // The log is date-keyed server-side, so it resets itself at midnight — nobody
 // carries over to the next day.
@@ -54,8 +54,8 @@ export default function DoorKiosk({ live, onExit }) {
   const unlock = async () => {
     if (code.length !== 4 || busy) return
     setBusy(true); setCodeErr('')
-    const ok = await B.verifyKioskCode(code)
-    if (!ok) {
+    const out = await B.verifyKioskCode(code)
+    if (!out || !out.ok) {
       setBusy(false); setCode('')
       setCodeErr(live ? 'That code didn’t match — check with the front office' : 'Enter facilitator code 0000 to open')
       return
@@ -132,7 +132,7 @@ export default function DoorKiosk({ live, onExit }) {
     return (
       <div className="scroll fade cholla-scroll">
         <div className="section-title">Welcome to Cholla</div>
-        <div className="section-sub">Front-door check-in · {present} in the facility now</div>
+        <div className="section-sub">Member check-in · {present} in the facility now</div>
 
         <div style={{ marginTop: 16 }}>
           <Seg options={['Check in', 'Check out']} value={mode === 'in' ? 'Check in' : 'Check out'}
@@ -160,7 +160,7 @@ export default function DoorKiosk({ live, onExit }) {
   const begin = code.length === 4 && !busy
   return (
     <div className="scroll fade cholla-scroll">
-      <div className="kiosk-title">Front-door setup</div>
+      <div className="kiosk-title">Member check-in setup</div>
       <div className="kiosk-block">
         <span className="lab">Facilitator code</span>
         <div className="codedots">
@@ -183,7 +183,7 @@ export default function DoorKiosk({ live, onExit }) {
       </div>
       <button className="btn" style={{ marginTop: 16, background: begin ? '#BE6A45' : '#D8C3B8', boxShadow: begin ? '0 12px 24px -10px rgba(190,106,69,.65)' : 'none' }}
         disabled={!begin} onClick={unlock}>
-        {busy ? 'Verifying…' : 'Open front-door check-in'}
+        {busy ? 'Verifying…' : 'Open member check-in'}
       </button>
       {onExit && <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={onExit}>Switch check-in area</button>}
       {!live && <div className="muted" style={{ textAlign: 'center', font: '500 12px Inter', marginTop: 12 }}>Preview facilitator code: 0 0 0 0</div>}

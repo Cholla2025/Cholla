@@ -5,22 +5,30 @@
 // (Azure AD) provider. Everything Azure-specific lives in this file so the UI
 // never has to know which backend it is on.
 //
-// When the API is unreachable (local `npm run dev` with no `swa start`, or a
-// static preview), the app runs in DEMO mode: deterministic fictional sample
-// data generated client-side, nothing persisted, nothing sent anywhere. This
-// is why the repository contains no client information at all — real client
-// data only ever exists inside the customer's Azure tenant.
+// DEMO MODE IS DEV-ONLY. When the API is unreachable during local `npm run
+// dev`, the app runs on deterministic fictional sample data so the flows can
+// be exercised. In a PRODUCTION build (import.meta.env.DEV === false) demo
+// mode is impossible: an unreachable API renders honest empty/error states,
+// never mock data — nothing fictional can ever appear on a clinic screen.
+export const DEMO_ALLOWED = import.meta.env.DEV
 
 let live = false
+let down = false
 
 export function liveMode() {
   return live
 }
 
+// True when the production build could not reach its API — the UI shows a
+// connection banner instead of silently empty dashboards.
+export function backendDown() {
+  return down
+}
+
 // Probe the API once at startup. A Static Web App always serves /api/health
-// from the linked Functions app; anywhere else this fails fast and we stay in
-// demo mode. SPA hosts answer unknown paths with index.html and a 200, so a
-// 200 alone is not proof of an API — insist on the JSON body.
+// from the linked Functions app; anywhere else this fails fast. SPA hosts
+// answer unknown paths with index.html and a 200, so a 200 alone is not proof
+// of an API — insist on the JSON body.
 export async function initBackend() {
   try {
     const ctl = new AbortController()
@@ -36,6 +44,13 @@ export async function initBackend() {
   } catch {
     live = false
   }
+  if (!live && !DEMO_ALLOWED) {
+    // Production with no reachable API: stay in LIVE code paths (so every
+    // surface talks to the real API and reports real failures) — demo data is
+    // not a fallback outside dev.
+    live = true
+    down = true
+  }
   return live
 }
 
@@ -48,10 +63,12 @@ export async function initBackend() {
 // screen — nobody reads client data just by having a Microsoft account.
 // ---------------------------------------------------------------------------
 
+// Top-level surfaces by role. Facilitators get their dashboard and Member
+// Check-In only — no Community surface (the API enforces the same 403).
 export const ACCESS = {
-  facilitator: ['staff', 'settings'],
-  leader: ['staff', 'leader', 'settings', 'ai'],
-  admin: ['staff', 'leader', 'settings', 'adminportal', 'ai'],
+  facilitator: ['staff', 'member', 'settings'],
+  leader: ['staff', 'member', 'community', 'leader', 'analytics', 'settings', 'ai'],
+  admin: ['staff', 'member', 'community', 'leader', 'analytics', 'settings', 'adminportal', 'ai'],
 }
 
 export function canAccess(role, surface) {
@@ -80,8 +97,8 @@ export function setToken(token) {
 // Entra ID principal (cookie) and our email-code Bearer token — and returns
 // the effective role, so the client never computes authorization itself.
 export async function getUser() {
-  if (!live) {
-    // Demo mode: the dashboards are open so the flows can be exercised.
+  if (!live && DEMO_ALLOWED) {
+    // Dev-only demo mode: the dashboards are open so the flows can be exercised.
     return { id: 'demo', name: 'Demo Leader', email: 'demo@example.org', role: 'admin', provider: 'demo' }
   }
   try {
@@ -190,14 +207,27 @@ async function api(path, opts = {}) {
 
 export const DEMO_KIOSK_CODE = '0000'
 
+// Verify a kiosk code. Resolves to { ok, facilitator? } — `facilitator` is
+// set ({id, name}) when a facilitator's personal code (rather than the admin
+// master code) unlocked the kiosk.
 export async function verifyKioskCode(code) {
-  if (!live) return code === DEMO_KIOSK_CODE
+  if (!live) return { ok: code === DEMO_KIOSK_CODE }
   try {
     const out = await api('/kiosk/verify', { method: 'POST', body: JSON.stringify({ code }) })
-    return Boolean(out && out.ok)
+    return out && out.ok ? { ok: true, facilitator: out.facilitator || null } : { ok: false }
   } catch {
-    return false
+    return { ok: false }
   }
+}
+
+// Set, rotate or clear a facilitator's personal kiosk code (leadership, or
+// the facilitator's own record). The code travels once in this POST body and
+// is stored server-side as a hash only.
+export async function setFacilitatorCode(id, code) {
+  return api('/org/facilitators/' + encodeURIComponent(id) + '/code', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -244,10 +274,16 @@ export async function removeFacilitator(id) {
 // Azure Table Storage inside the customer's tenant.
 // ---------------------------------------------------------------------------
 
-export async function fetchRosters(date) {
+// `scope` ({session, n}) is REQUIRED for kiosk callers: an unlocked kiosk is
+// scoped server-side to the one group it is running and never receives other
+// groups' rows. Staff sessions omit it and get the whole day.
+export async function fetchRosters(date, scope) {
   if (!live) return {}
   try {
-    const out = await api('/rosters?date=' + encodeURIComponent(date))
+    const qs = scope && scope.session
+      ? '&session=' + encodeURIComponent(scope.session) + '&n=' + encodeURIComponent(scope.n)
+      : ''
+    const out = await api('/rosters?date=' + encodeURIComponent(date) + qs)
     return out && out.rosters ? out.rosters : {}
   } catch (err) {
     console.warn('[cholla] could not load rosters:', err.message)
@@ -274,7 +310,7 @@ export async function saveRoster(session, n, date, rows) {
 }
 
 // ---------------------------------------------------------------------------
-// Front-door log — who is in the facility. A separate table from the group
+// Member Check-In log — clients in the facility. A separate table from the group
 // rosters; date-keyed, so the list starts fresh every clinic day. Access
 // mirrors rosters: staff any date, unlocked kiosk today only.
 // ---------------------------------------------------------------------------
@@ -285,12 +321,12 @@ export async function fetchDoorRows(date) {
     const out = await api('/frontdoor?date=' + encodeURIComponent(date))
     return out && Array.isArray(out.rows) ? out.rows : []
   } catch (err) {
-    console.warn('[cholla] could not load front-door log:', err.message)
+    console.warn('[cholla] could not load member check-in log:', err.message)
     return null
   }
 }
 
-// Merge ONE front-door row (same conflict-safe merge as rosters). Throws on
+// Merge ONE member check-in row (same conflict-safe merge as rosters). Throws on
 // failure so the door kiosk never shows a false welcome.
 export async function saveDoorRow(date, row) {
   if (!live) return null
@@ -357,7 +393,8 @@ export async function fetchGroupClients(session, n) {
 
 // ---------------------------------------------------------------------------
 // Visitor log — non-client, non-staff people on site. Separate table, same
-// access rules and midnight reset as the front-door log.
+// access rules and midnight reset as the Member Check-In log — but reads are
+// LEADERSHIP-only on the staff side (facilitators get a 403).
 // ---------------------------------------------------------------------------
 
 export async function fetchVisitorRows(date) {
@@ -381,10 +418,12 @@ export async function saveVisitorRow(date, row) {
 // facilitator directory (the Microsoft-backed accounts) for "visiting".
 export async function fetchVisitorOptions() {
   if (!live) {
-    return {
-      companies: ['Desert Sky Supplies', 'Maricopa Health Partners', 'Family'],
-      people: ['D. Alvarez, LISAC', 'R. Okafor, LPC', 'Ruth Okafor, Clinical Director', 'S. Tran, LCSW'],
-    }
+    return DEMO_ALLOWED
+      ? {
+        companies: ['Desert Sky Supplies', 'Maricopa Health Partners', 'Family'],
+        people: ['D. Alvarez, LISAC', 'R. Okafor, LPC', 'Ruth Okafor, Clinical Director', 'S. Tran, LCSW'],
+      }
+      : { companies: [], people: [] }
   }
   try {
     return await api('/visitors/options')
@@ -397,6 +436,107 @@ export async function fetchVisitorOptions() {
 // AI assistant (leader/admin). The server builds the model's context from
 // de-identified aggregates only — client names never reach the AI.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Analytics (leader/admin) — aggregate trends for the Analytics page. Three
+// separate streams (groups / member / community), counts only, no names.
+// ---------------------------------------------------------------------------
+
+export async function fetchAnalytics(days) {
+  if (!live) return null
+  return api('/analytics?days=' + encodeURIComponent(days || 30))
+}
+
+// ----- personal alert subscriptions (Analytics page) -----
+
+export async function fetchAlertSubs() {
+  if (!live) return { subscriptions: [] }
+  return api('/alerts')
+}
+
+export async function createAlertSub(sub) {
+  if (!live) return { subscription: { id: 'demo-s1', ...sub } }
+  return api('/alerts', { method: 'POST', body: JSON.stringify(sub) })
+}
+
+export async function deleteAlertSub(id) {
+  if (!live) return null
+  return api('/alerts/' + encodeURIComponent(id), { method: 'DELETE' })
+}
+
+// ----- Microsoft 365 directory (leader/admin) -----
+// People from the tenant, for autofilling staff/facilitator forms. Returns
+// null when the directory is not configured/available — pickers simply don't
+// render then.
+
+export async function fetchDirectory() {
+  if (!live) {
+    return { users: [{ name: 'Demo Person', email: 'demo.person@example.org' }] }
+  }
+  try {
+    const out = await api('/directory')
+    return out && Array.isArray(out.users) ? out : null
+  } catch {
+    return null
+  }
+}
+
+// ----- community visitor pre-registration -----
+
+// PUBLIC route (the /preregister page) — no auth of any kind.
+export async function submitPreregistration(payload) {
+  if (!live) return { ok: true }
+  const res = await fetch('/api/preregister', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    let msg = 'Could not submit (' + res.status + ')'
+    try {
+      const body = await res.json()
+      if (body && body.error) msg = body.error
+    } catch { /* keep default */ }
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
+// Front-desk queue (leadership or unlocked kiosk).
+export async function fetchPreregistrations(date) {
+  if (!live) return []
+  try {
+    const out = await api('/preregister?date=' + encodeURIComponent(date))
+    return out && Array.isArray(out.entries) ? out.entries : []
+  } catch {
+    return null
+  }
+}
+
+export async function confirmPreregistration(id, date, extras) {
+  return api('/preregister/' + encodeURIComponent(id) + '/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ date, ...extras }),
+  })
+}
+
+export async function cancelPreregistration(id, date) {
+  return api('/preregister/' + encodeURIComponent(id) + '/cancel', {
+    method: 'POST',
+    body: JSON.stringify({ date }),
+  })
+}
+
+// ----- reports configuration (read-only recipients list) -----
+
+export async function fetchReportConfig() {
+  if (!live) return { recipients: [], alertDropPct: 5, alertCriticalPct: 10 }
+  try {
+    return await api('/reports/config')
+  } catch {
+    return null
+  }
+}
 
 export async function askAi(question, history) {
   if (!live) {

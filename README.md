@@ -41,18 +41,22 @@ tablet can be pinned to kiosk mode — see
   with no role sees an "access pending" screen. Facilitators get the
   facilitator dashboard; leaders/admins get both dashboards.
 - **Kiosk auth** — the kiosk is deliberately **unauthenticated** (clients
-  never sign in). A facilitator unlocks it with a **day code** that the API
-  verifies server-side (timing-safe) against the `KIOSK_CODE` app setting.
-  The code never ships in this repository.
+  never sign in). A facilitator unlocks it with their **personal 4-digit
+  kiosk code** (stored hashed server-side; the kiosk records whose code
+  unlocked it) or the `KIOSK_CODE` master/fallback app setting, verified
+  server-side (timing-safe). No code ever ships in this repository.
 
 ## PHI & demo mode
 
-When no API is reachable (plain `npm run dev`, or any static preview) the app
-runs entirely on **deterministic fictional sample data** generated client-side
-from [`src/seed.js`](src/seed.js) — nothing is persisted and nothing is sent
-anywhere. That is why this repository contains **zero client information**:
-real client data only ever exists inside the customer's Azure tenant, behind
-Entra ID and the server-verified kiosk code.
+Demo mode is **dev-only**. During local `npm run dev` with no API reachable,
+the app runs on **deterministic fictional sample data** from
+[`src/seed.js`](src/seed.js) — nothing persisted, nothing sent anywhere. A
+**production build strips the demo data out entirely** (the fictional names
+don't even exist in the shipped bundle): if the API is unreachable in
+production, the app shows honest error/empty states, never mock data. This
+repository contains **zero client information**: real client data only ever
+exists inside the customer's Azure tenant, behind Entra ID and the
+server-verified kiosk codes.
 
 Attendance rosters are PHI. Deploy only into an Azure subscription covered by
 a **Business Associate Agreement (BAA)** with Microsoft (available through the

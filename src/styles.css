@@ -72,7 +72,7 @@ a { color: inherit; }
 .kiosk-header img { height: 56px; width: auto; }
 /* The front page leads with the brand — noticeably larger logo, still tidy */
 .kiosk-header--home { padding-top: 34px; gap: 10px; }
-.kiosk-header--home img { height: 92px; }
+.kiosk-header--home img { height: 124px; }
 .kiosk-eyebrow {
   font: 700 12px Inter;
   letter-spacing: .14em;
@@ -475,6 +475,21 @@ textarea.bulk-paste {
 .launch-btn:hover { border-color: #4C84C4; }
 .launch-title { font: 700 17px Inter; color: var(--ink); }
 .launch-sub { font: 500 12.5px Inter; color: var(--muted); }
+/* Quieter variant for the staff/admin entry at the bottom of the launcher */
+.launch-btn--ghost { background: #F7F9FC; border-style: dashed; box-shadow: none; }
+
+/* Bottom "Home" button on mobile — always a way back to device selection */
+.kiosk-home {
+  flex: none;
+  margin: 8px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 0;
+  width: auto;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  font: 700 14px Inter;
+  color: var(--ink);
+}
 
 /* Visitor HIPAA acknowledgment */
 .hipaa-box {

@@ -12,6 +12,41 @@ You can hand this whole file to an AI assistant and say "walk me through it."
 > is the condensed runbook. This file is the full, first-time, checkbox-driven
 > version.
 
+## What changed in the wrap-up release (v3)
+
+- **Naming**: "Front door" is retired. Clients' daily door log is **Member
+  Check-In**; non-client visitors are **Community Check-In**. (Storage table
+  names are unchanged for data continuity.)
+- **Sign-in is Microsoft-only** — the email one-time-code option is gone from
+  the sign-in page (the API endpoints remain, unused). Staff added under
+  Settings get a welcome email automatically.
+- **Top-level role-gated tabs**: facilitators see Facilitator Dashboard
+  (auto-scoped to their own groups) + Member Check-In + Settings — and are
+  server-side 403'd from all Community data. Leadership additionally gets
+  Community Check-In, Leadership, **Analytics**, Reports and AI.
+- **Analytics page** (leadership): group / member / community trends kept as
+  three separate streams, visit durations, never-checked-out flags, peak
+  hours — plus **personal alert subscriptions** (group thresholds and
+  per-client missed-check-in alerts, evaluated at day close with the nightly
+  report run; alert emails carry the client's name + missed status ONLY).
+- **Per-facilitator kiosk codes**: each facilitator sets a personal 4-digit
+  code in Settings (stored hashed); the kiosk records whose code unlocked it.
+  `KIOSK_CODE` stays as the admin master/fallback. Never share a code with
+  clients; rotate weekly.
+- **Facilitators can add clients** (single or bulk) — but only into their own
+  assigned groups, enforced server-side.
+- **Super admins**: the `ADMIN_EMAILS` addresses. Only they can create,
+  promote, demote, deactivate or delete admin accounts, and nobody can modify
+  a super admin's record in-app. Entra sign-ins for these addresses always
+  resolve to admin (bootstrap fix).
+- **Community pre-registration**: a public, write-only `/preregister` page
+  for NON-clients; the front desk confirms arrivals (HIPAA acknowledgment +
+  phone) at the Community kiosk or the Community dashboard.
+- **Microsoft 365 people picker** on the add-staff and add-facilitator forms
+  (`/api/directory`, User.Read.All, leadership-only, nothing logged).
+- **Demo data is dev-only**: production builds contain no mock data at all —
+  an unreachable backend shows honest error/empty states.
+
 ## What you're deploying (in words)
 
 ```
@@ -261,7 +296,7 @@ Copy the output — that's your `SESSION_SECRET`.
 | Name | Value | Required? |
 | --- | --- | --- |
 | `STORAGE_CONNECTION_STRING` | Storage Account connection string from Phase 1.2.6 | **Required** |
-| `KIOSK_CODE` | Your 4-digit kiosk day code from Phase 0 — **exactly 4 digits**. Until set, kiosk unlock is disabled entirely (fails closed). | **Required** for the kiosk |
+| `KIOSK_CODE` | The **admin master/fallback** 4-digit kiosk code — **exactly 4 digits**. Facilitators now have their own personal kiosk codes, set and rotated in **Settings → Facilitator kiosk codes** (stored hashed; the kiosk records whose code unlocked it). Keep `KIOSK_CODE` during the transition; remove it later to require personal codes only. | **Required** for the kiosk |
 | `AZURE_CLIENT_ID` | Application (client) ID from Phase 3.4 | **Required** for Microsoft sign-in |
 | `AZURE_CLIENT_SECRET` | Client secret value from Phase 3.5 | **Required** for Microsoft sign-in |
 | `SESSION_SECRET` | The `openssl rand -base64 48` output above (any random string of 32+ chars works). Signs email-code sessions. | **Required** for email sign-in |
@@ -275,6 +310,8 @@ Copy the output — that's your `SESSION_SECRET`.
 | `ALERT_CRITICAL_PCT` | Drop (%) above which the alert is marked CRITICAL. | Optional (default 10) |
 | `ANTHROPIC_API_KEY` | Claude API key for the in-app **AI** tab (leadership analytics Q&A). Until set, the AI tab shows a friendly not-configured message. The AI receives ONLY de-identified aggregates — client names never leave the API. | Optional |
 | `ANTHROPIC_MODEL` | Optional model override for the AI tab. | Optional (default `claude-opus-4-8`) |
+| `SITE_URL` | Optional; the site's public URL for the "Sign in" button in welcome emails. When unset, the API uses the request's Origin. | Optional |
+| `AZURE_TENANT_ID` | Optional override of the Microsoft tenant used by the `/api/directory` people picker; defaults to the Cholla tenant baked into the API. Requires **User.Read.All** (application) admin-consented on the same app registration as sign-in. | Optional |
 
 - [ ] All eight required settings added, values pasted with no stray
   spaces or quotes, **Apply** clicked.

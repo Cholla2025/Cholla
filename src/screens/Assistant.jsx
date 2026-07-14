@@ -11,7 +11,7 @@ const SUGGESTIONS = [
   'How is attendance trending this week?',
   'Which groups are declining and by how much?',
   'Compare Morning vs Afternoon this month',
-  'How busy was the front door today vs last week?',
+  'How busy was member check-in today vs last week?',
 ]
 
 // ----- tiny markdown renderer (tables, bold, headers, lists) -----
@@ -137,7 +137,7 @@ export default function Assistant({ store }) {
           <>
             <div className="card">
               <Empty title="Ask anything about the numbers">
-                Attendance, trends, group comparisons, front-door traffic —
+                Attendance, trends, group comparisons, member check-in traffic —
                 answers come back with tables built from your live data.
               </Empty>
             </div>

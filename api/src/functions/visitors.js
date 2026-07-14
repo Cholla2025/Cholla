@@ -19,7 +19,7 @@
 
 const { app } = require('@azure/functions')
 const { json, guard, readJson, isValidDate, cleanString } = require('../lib/util')
-const { isStaff, hasValidKioskCode } = require('../lib/auth')
+const { identityOf, hasValidKioskCode } = require('../lib/auth')
 const { visitorsTable, listOrgEntities, listStaff } = require('../lib/storage')
 
 const VISITOR_STATUSES = ['On Site', 'Departed']
@@ -45,15 +45,23 @@ function kioskDateAllowed(date) {
   return [clinicToday(-1), clinicToday(0), clinicToday(1)].includes(date)
 }
 
+// Community Check-In data is a separate stream from anything client-related.
+// LEADERSHIP ONLY on the staff side — facilitators have no community surface
+// and get a hard 403. The kiosk keeps its code-gated current-day access so
+// visitors can check themselves in at the desk.
 async function visitorAccess(request, context, date) {
-  if (await isStaff(request)) return null
-  if (hasValidKioskCode(request, context)) {
+  const who = await identityOf(request)
+  if (who && ['leader', 'admin'].includes(who.role)) return null
+  if (who && who.role === 'facilitator') {
+    return json(403, { error: 'Community Check-In is available to leadership only' })
+  }
+  if (await hasValidKioskCode(request, context)) {
     if (date && !kioskDateAllowed(date)) {
       return json(403, { error: 'The kiosk can only access the current day' })
     }
     return null
   }
-  return json(401, { error: 'Sign in as staff or unlock the kiosk to access the visitor log' })
+  return json(401, { error: 'Sign in as leadership or unlock the kiosk to access the Community Check-In log' })
 }
 
 // Validate + sanitize one visitor row. Check-ins (no `out` time) must carry

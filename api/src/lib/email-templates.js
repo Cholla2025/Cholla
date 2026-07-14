@@ -160,21 +160,21 @@ function renderDailyReport(metrics, prevMetrics) {
     '<p style="margin:0 0 12px;font-size:15px;color:' + MUTED + '">' + esc(fmtDay(metrics.date)) + '</p>' +
       statRow([
         stat('Group check-ins', String(metrics.groupTotal), trendHtml(t, 'yesterday')),
-        stat('Front door', String(metrics.door.total)),
+        stat('Member check-ins', String(metrics.door.total)),
         stat('Attendance', pctText(overallPct)),
       ]) +
       heading('By session') +
       tableHtml(['Session', 'Checked in', 'Expected', 'Attendance'], sessionRows) +
       heading('By group') +
       tableHtml(['Group', 'Session', 'Checked in / expected', 'Attendance'], groupRows) +
-      '<p style="margin:16px 0 0;font-size:14px">Front door: <strong>' + metrics.door.total + '</strong> visit(s) · <strong>' + metrics.door.stillIn + '</strong> still in facility</p>'
+      '<p style="margin:16px 0 0;font-size:14px">Member check-in: <strong>' + metrics.door.total + '</strong> visit(s) · <strong>' + metrics.door.stillIn + '</strong> still in facility</p>'
   )
 
   const text = [
     subject,
     '',
     'Group check-ins: ' + metrics.groupTotal + ' (' + trendText(t, 'yesterday') + ')',
-    'Front door: ' + metrics.door.total + ' visit(s), ' + metrics.door.stillIn + ' still in facility',
+    'Member check-in: ' + metrics.door.total + ' visit(s), ' + metrics.door.stillIn + ' still in facility',
     'Attendance: ' + pctText(overallPct),
     '',
     'By session:',
@@ -210,7 +210,7 @@ function renderPeriodReport(period) {
       statRow([
         stat('Total check-ins', String(period.totalCheckins), trendHtml(period.trendPct, comparedTo)),
         stat('Avg / day', String(period.avgPerDay)),
-        stat('Front door', String(period.doorTotal)),
+        stat('Member check-ins', String(period.doorTotal)),
       ]) +
       heading('Groups') +
       '<p style="margin:8px 0;font-size:14px">' +
@@ -222,7 +222,7 @@ function renderPeriodReport(period) {
         : '') +
       '</p>' +
       heading('Per day') +
-      tableHtml(['Date', 'Group check-ins', 'Front door'], perDayRows)
+      tableHtml(['Date', 'Group check-ins', 'Member check-ins'], perDayRows)
   )
 
   const text = [
@@ -230,12 +230,12 @@ function renderPeriodReport(period) {
     '',
     'Total check-ins: ' + period.totalCheckins + ' (' + trendText(period.trendPct, comparedTo) + ')',
     'Average per day: ' + period.avgPerDay + ' across ' + period.daysCount + ' clinic day(s)',
-    'Front door: ' + period.doorTotal,
+    'Member check-ins: ' + period.doorTotal,
     best ? 'Best group: ' + groupLabel(best) + ' (' + best.session + ' ' + best.n + ') — ' + best.checkedIn + ' check-ins' : 'No group activity recorded.',
     lowest ? 'Lowest group: ' + groupLabel(lowest) + ' (' + lowest.session + ' ' + lowest.n + ') — ' + lowest.checkedIn + ' check-ins' : '',
     '',
     'Per day:',
-    ...period.perDay.map((d) => '  ' + fmtDay(d.date) + ': ' + d.groupTotal + ' check-ins, ' + d.doorTotal + ' front door'),
+    ...period.perDay.map((d) => '  ' + fmtDay(d.date) + ': ' + d.groupTotal + ' check-ins, ' + d.doorTotal + ' member check-ins'),
     '',
     FOOTER,
   ].filter((line) => line !== '').join('\n')
@@ -285,8 +285,111 @@ function renderVolumeAlert(alerts, date) {
   return { subject, html, text }
 }
 
+// Welcome email for a newly created sign-in account. Role-aware: each role
+// gets a short description of what its dashboard covers. No PHI — just the
+// person's own name, their role, and where to sign in.
+function renderOnboarding({ name, role, siteUrl }) {
+  const subject = 'Welcome to Cholla Check-In'
+  const roleBlurbs = {
+    facilitator:
+      'As a facilitator you can run your group from the Facilitator Dashboard, check members in at the door, and add clients to your own groups.',
+    leader:
+      'As a leader you have the leadership dashboards: live attendance, Member Check-In, Community Check-In, analytics, reports, and team management in Settings.',
+    admin:
+      'As an admin you have full access: every dashboard plus platform settings, sign-in accounts, and reporting configuration.',
+  }
+  const blurb = roleBlurbs[role] || roleBlurbs.facilitator
+  const link = siteUrl
+    ? '<p style="margin:16px 0 0"><a href="' + esc(siteUrl) + '" style="display:inline-block;background:' + TERRACOTTA + ';color:#ffffff;text-decoration:none;padding:10px 22px;border-radius:6px;font-weight:bold">Sign in with Microsoft</a></p>'
+    : ''
+
+  const html = layout(
+    'Welcome to Cholla Check-In',
+    '<p style="margin:0 0 12px;font-size:15px">Hi ' + esc(name) + ',</p>' +
+      '<p style="margin:0 0 12px;font-size:14px">An account has been created for you on the Cholla Behavioral Health Check-In platform, with the <strong>' + esc(role) + '</strong> role.</p>' +
+      '<p style="margin:0 0 12px;font-size:14px">' + esc(blurb) + '</p>' +
+      '<p style="margin:0;font-size:14px">Sign in with your Microsoft work account — there is no separate password to remember.</p>' +
+      link
+  )
+
+  const text = [
+    subject,
+    '',
+    'Hi ' + name + ',',
+    '',
+    'An account has been created for you on the Cholla Behavioral Health Check-In platform, with the ' + role + ' role.',
+    '',
+    blurb,
+    '',
+    'Sign in with your Microsoft work account — there is no separate password to remember.',
+    siteUrl ? 'Sign in here: ' + siteUrl : '',
+    '',
+    FOOTER,
+  ].filter((line) => line !== '').join('\n')
+
+  return { subject, html, text }
+}
+
+// Personal group-threshold alert: a subscribed group closed the day under the
+// subscriber's chosen check-in count. Group label + counts only — no names.
+function renderGroupThresholdAlert({ groupLabel: label, checkedIn, threshold, date }) {
+  const subject = 'Attendance alert — ' + label + ' below your threshold'
+  const html = layout(
+    'Attendance alert',
+    '<p style="margin:0 0 12px;font-size:14px">' + esc(fmtDay(date)) + '</p>' +
+      '<p style="margin:0 0 12px;font-size:14px"><strong>' + esc(label) + '</strong> closed the day with <strong>' + checkedIn + '</strong> check-in(s) — below your alert threshold of <strong>' + threshold + '</strong>.</p>' +
+      '<p style="margin:0;font-size:13px;color:' + MUTED + '">You receive this because you subscribed to this group on the Analytics page. Unsubscribe there at any time.</p>',
+    TERRACOTTA
+  )
+  const text = [
+    subject,
+    '',
+    fmtDay(date),
+    label + ' closed the day with ' + checkedIn + ' check-in(s) — below your alert threshold of ' + threshold + '.',
+    '',
+    'You receive this because you subscribed to this group on the Analytics page. Unsubscribe there at any time.',
+    '',
+    FOOTER,
+  ].join('\n')
+  return { subject, html, text }
+}
+
+// Personal missed-check-in alert. MINIMUM NECESSARY by explicit owner
+// decision: the client's name and the missed status ONLY — never a diagnosis,
+// note, or any other detail. One email per subscriber per day covers all of
+// their subscribed clients who missed.
+function renderMissedClientAlert({ names, date }) {
+  const list = Array.isArray(names) ? names : []
+  const subject = 'Check-in alert — ' + list.length + ' client(s) did not check in'
+  const html = layout(
+    'Check-in alert',
+    '<p style="margin:0 0 12px;font-size:14px">' + esc(fmtDay(date)) + '</p>' +
+      '<p style="margin:0 0 8px;font-size:14px">The following client(s) you subscribed to did not check in today:</p>' +
+      '<ul style="margin:0 0 12px;padding-left:20px;font-size:14px">' +
+      list.map((n) => '<li style="margin:2px 0">' + esc(n) + '</li>').join('') +
+      '</ul>' +
+      '<p style="margin:0;font-size:13px;color:' + MUTED + '">This notice contains only the name and missed status. Manage your subscriptions on the Analytics page.</p>',
+    TERRACOTTA
+  )
+  const text = [
+    subject,
+    '',
+    fmtDay(date),
+    'The following client(s) you subscribed to did not check in today:',
+    ...list.map((n) => '  - ' + n),
+    '',
+    'This notice contains only the name and missed status. Manage your subscriptions on the Analytics page.',
+    '',
+    FOOTER,
+  ].join('\n')
+  return { subject, html, text }
+}
+
 module.exports = {
   renderDailyReport,
   renderPeriodReport,
   renderVolumeAlert,
+  renderOnboarding,
+  renderGroupThresholdAlert,
+  renderMissedClientAlert,
 }

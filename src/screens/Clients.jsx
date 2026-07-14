@@ -118,7 +118,7 @@ export default function Clients({ store }) {
               className="input bulk-paste" {...noAutofill()}
               value={bulk}
               onChange={(e) => { setBulk(e.target.value); setResult('') }}
-              placeholder={'Maria Alvarez\nPark, Kevin\nDana Whitfield…'}
+              placeholder={'First Last\nLast, First\n…one name per line'}
               rows={5}
             />
             <div className="row" style={{ marginTop: 12 }}>

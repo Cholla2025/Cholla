@@ -23,6 +23,7 @@ const { rostersTable, frontdoorTable, listOrgEntities } = require('../lib/storag
 const { dailyMetrics, periodMetrics, trendPct, volumeAlerts } = require('../lib/metrics')
 const { renderDailyReport, renderPeriodReport, renderVolumeAlert } = require('../lib/email-templates')
 const { acsConfigured, sendEmail } = require('../lib/mailer')
+const { evaluateAlertSubscriptions } = require('../lib/alert-eval')
 
 const PERIODS = ['daily', 'weekly', 'monthly', 'quarterly']
 
@@ -187,8 +188,35 @@ app.http('reports-preview', {
     const date = request.query.get('date') || clinicToday()
     if (!isValidDate(date)) return json(400, { error: 'date must be YYYY-MM-DD' })
 
-    const { report, metrics } = await buildReport(period, date, context)
-    return json(200, { subject: report.subject, html: report.html, text: report.text, metrics })
+    const { report, metrics, alerts } = await buildReport(period, date, context)
+    return json(200, { subject: report.subject, html: report.html, text: report.text, metrics, alerts })
+  }),
+})
+
+// Read-only reporting configuration for the Reports tab: who receives the
+// scheduled reports and the volume-alert thresholds. Recipients are staff
+// addresses (configuration, not PHI); leadership only.
+app.http('reports-config', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'reports/config',
+  handler: guard(async (request) => {
+    const who = await requireLeader(request)
+    if (who.status) return who
+    const recipients = (process.env.REPORT_EMAILS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const num = (name, fallback) => {
+      const v = Number(process.env[name])
+      return Number.isFinite(v) && v > 0 ? v : fallback
+    }
+    return json(200, {
+      recipients,
+      alertDropPct: num('ALERT_DROP_PCT', 5),
+      alertCriticalPct: num('ALERT_CRITICAL_PCT', 10),
+      emailConfigured: acsConfigured(),
+    })
   }),
 })
 
@@ -241,7 +269,19 @@ app.http('reports-send', {
     for (const m of outbox) {
       await sendEmail({ to: recipients, subject: m.subject, text: m.text, html: m.html })
     }
-    return json(200, { ok: true, sent: outbox.map((m) => m.subject) })
+
+    // The daily run is also "day close" for the personal alert subscriptions
+    // (group thresholds + missed-client alerts). Contained: an evaluation
+    // failure never fails the report send that already happened.
+    let alertSummary = null
+    if (period === 'daily') {
+      try {
+        alertSummary = await evaluateAlertSubscriptions(date, context)
+      } catch (err) {
+        context.warn('[cholla-api] alert subscription evaluation failed')
+      }
+    }
+    return json(200, { ok: true, sent: outbox.map((m) => m.subject), personalAlerts: alertSummary })
   }),
 })
 

@@ -8,23 +8,28 @@ function makeAuthState() {
   return { authReady: false, authUser: null, authRole: null, authName: '' }
 }
 
+// Demo data (fictional names) exists ONLY in dev builds — a production build
+// starts from genuinely empty state and everything comes from the API.
+const DEMO = B.DEMO_ALLOWED
+
 function makeInitialState() {
   const today = S.todayISO()
   return {
     live: false,
+    apiDown: false,
     surface: 'kiosk', screen: 'kiosk-start',
     today, todayLabel: S.todayLabel(),
     demoMin: 13 * 60 + 47,
-    org: S.defaultOrg(), orgBusy: false, orgErr: '',
+    org: DEMO ? S.defaultOrg() : { groups: [], facilitators: [] }, orgBusy: false, orgErr: '',
     rosterErr: '',
     kSession: S.currentSession(), kGroup: null, kCode: '', kCodeErr: '', kBusy: false,
-    kUnlocked: false, kSaving: false, kErr: '', kClients: [],
-    clients: S.defaultClients(), clientsBusy: false, clientsErr: '',
+    kUnlocked: false, kUnlockedBy: null, kSaving: false, kErr: '', kClients: [],
+    clients: DEMO ? S.defaultClients() : [], clientsBusy: false, clientsErr: '',
     kMode: 'in', kEntry: '', confirm: null,
-    staffName: 'Dana Alvarez, LISAC',
+    staffName: DEMO ? 'Dana Alvarez, LISAC' : '',
     staffGroup: 1, staffSession: S.currentSession(), staffFrom: today, staffTo: today,
     staffStatus: 'All', staffSearch: '', staffView: 'live',
-    leaderName: 'Ruth Okafor, Clinical Director',
+    leaderName: DEMO ? 'Ruth Okafor, Clinical Director' : '',
     leaderSessionF: 'All', leaderFac: 'All', leaderStatusF: 'All', leaderFrom: today, leaderTo: today,
     leaderSearch: '', leaderGroupSession: null, leaderGroupN: null, leaderView: 'overview',
     detailStatus: 'All', detailSearch: '',
@@ -56,6 +61,22 @@ export function useCheckIn() {
 
   // ----- org helpers -----
   const groupsFor = (session) => ref.current.org.groups.filter((g) => g.session === session).sort((a, b) => a.n - b.n)
+  // The groups the signed-in user runs. Facilitators are auto-scoped to the
+  // groups whose facilitator record carries their account email; leadership
+  // and admins see every group.
+  const myGroups = () => {
+    const s = ref.current
+    if (s.authRole !== 'facilitator') return s.org.groups
+    const email = (s.authUser?.email || '').toLowerCase()
+    if (!email) return []
+    const ids = new Set(
+      s.org.facilitators
+        .filter((f) => f.active !== false && String(f.email || '').toLowerCase() === email)
+        .map((f) => f.id)
+    )
+    return s.org.groups.filter((g) => g.facilitatorId && ids.has(g.facilitatorId))
+  }
+  const myGroupsFor = (session) => myGroups().filter((g) => g.session === session).sort((a, b) => a.n - b.n)
   const getGroup = (session, n) => ref.current.org.groups.find((g) => g.session === session && g.n === Number(n))
   const facById = (id) => ref.current.org.facilitators.find((f) => f.id === id)
   const facLabelFor = (g) => S.facLabel(g && facById(g.facilitatorId))
@@ -96,6 +117,7 @@ export function useCheckIn() {
             : prev.org
         return {
           live,
+          apiDown: B.backendDown(),
           org: nextOrg,
           orgErr: live && !org ? 'Could not load the schedule — check the connection and reload' : prev.orgErr,
           clients: live ? (clients || []) : prev.clients,
@@ -136,10 +158,14 @@ export function useCheckIn() {
         }))
       }
       if (!s.live) return
-      const canRead = s.authUser || s.kUnlocked
-      if (!canRead) return
-      const rosters = await B.fetchRosters(today)
-      set((prev) => ({ rosters: { ...prev.rosters, ...rosters } }))
+      if (s.authUser) {
+        const rosters = await B.fetchRosters(today)
+        set((prev) => ({ rosters: { ...prev.rosters, ...rosters } }))
+      } else if (s.kUnlocked && s.kGroup) {
+        // Kiosk devices are scoped to the ONE group they're running.
+        const rosters = await B.fetchRosters(today, { session: s.kSession, n: s.kGroup })
+        set((prev) => ({ rosters: { ...prev.rosters, ...rosters } }))
+      }
     }
     const iv = setInterval(refresh, 60 * 1000)
     const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
@@ -369,10 +395,24 @@ export function useCheckIn() {
   // ----- navigation ----- (access is gated at the app shell by role)
   const goKiosk = () => set((s) => ({ surface: 'kiosk', screen: s.screen.startsWith('kiosk') ? s.screen : 'kiosk-start' }))
   const goStaff = () => set({ surface: 'staff', screen: 'staff-dashboard' })
+  const goMember = () => set({ surface: 'member', screen: 'member' })
+  const goCommunity = () => set({ surface: 'community', screen: 'community' })
   const goLeader = () => set((s) => ({ surface: 'leader', screen: s.leaderGroupN ? 'leader-detail' : 'leader-overview' }))
+  const goAnalytics = () => set({ surface: 'analytics', screen: 'analytics' })
   const goSettings = () => set({ surface: 'settings', screen: 'settings' })
   const goAdmin = () => set({ surface: 'adminportal', screen: 'adminportal' })
   const goAi = () => set({ surface: 'ai', screen: 'ai' })
+  // Mobile "Home": relock the kiosk and return all the way to the
+  // device-selection screen.
+  const resetKioskHome = () => {
+    clearTimeout(timer.current)
+    B.setKioskCode(null)
+    set({
+      surface: 'kiosk', screen: 'kiosk-start',
+      kCode: '', kCodeErr: '', kEntry: '', kErr: '',
+      kUnlocked: false, kUnlockedBy: null, kBusy: false, kSaving: false, confirm: null,
+    })
+  }
   // Reset the demo roster state without disturbing sign-in, org, or live data.
   const resetDemo = () => {
     clearTimeout(timer.current)
@@ -397,8 +437,8 @@ export function useCheckIn() {
     if (!s.kGroup || !getGroup(s.kSession, s.kGroup)) { set({ kCodeErr: 'Select a group above to begin' }); return }
     if (s.kCode.length !== 4 || s.kBusy) return
     set({ kBusy: true, kCodeErr: '' })
-    const ok = await B.verifyKioskCode(s.kCode)
-    if (!ok) {
+    const out = await B.verifyKioskCode(s.kCode)
+    if (!out || !out.ok) {
       set({
         kBusy: false, kCode: '',
         kCodeErr: s.live ? 'That code didn’t match — check with the front office' : 'Enter facilitator code 0000 to begin',
@@ -408,20 +448,24 @@ export function useCheckIn() {
     B.setKioskCode(s.kCode)
     let kClients = []
     if (s.live) {
-      // The kiosk is anonymous until unlocked; now it can read today's
-      // rosters and THIS group's assigned client names (for check-in matching).
-      const rosters = await B.fetchRosters(S.todayISO())
+      // The kiosk is anonymous until unlocked; now it can read today's roster
+      // and assigned client names for THIS group only (server-scoped).
+      const rosters = await B.fetchRosters(S.todayISO(), { session: s.kSession, n: s.kGroup })
       kClients = (await B.fetchGroupClients(s.kSession, s.kGroup)) || []
       set((prev) => ({ rosters: { ...prev.rosters, ...rosters } }))
     } else {
       kClients = S.defaultClients().filter((c) => c.active && c.session === s.kSession && c.n === s.kGroup)
     }
-    set({ kBusy: false, kUnlocked: true, kClients, screen: 'kiosk-member', kEntry: '', kErr: '', kMode: 'in' })
+    set({
+      kBusy: false, kUnlocked: true,
+      kUnlockedBy: out.facilitator ? out.facilitator.name : null,
+      kClients, screen: 'kiosk-member', kEntry: '', kErr: '', kMode: 'in',
+    })
   }
   const beginSession2 = () => {
-    // Lock the kiosk again between sessions — the day code must be re-entered.
+    // Lock the kiosk again between sessions — the code must be re-entered.
     B.setKioskCode(null)
-    set({ screen: 'kiosk-start', kCode: '', kCodeErr: '', kEntry: '', kErr: '', kUnlocked: false, confirm: null })
+    set({ screen: 'kiosk-start', kCode: '', kCodeErr: '', kEntry: '', kErr: '', kUnlocked: false, kUnlockedBy: null, confirm: null })
   }
   const setKMode = (m) => set({ kMode: m === 'Check in' ? 'in' : 'out', kEntry: '', kErr: '' })
   const onMemberName = (e) => set({ kEntry: e.target.value.replace(/[^A-Za-z .'-]/g, '').slice(0, 40), kErr: '' })
@@ -476,7 +520,9 @@ export function useCheckIn() {
   // ----- staff (facilitator dashboard) -----
   const staffGroupObj = () => getGroup(ref.current.staffSession, ref.current.staffGroup)
   const staffSetSession = (sv) => {
-    const first = groupsFor(sv)[0]
+    // Facilitators only ever land on their own groups.
+    const pool = ref.current.authRole === 'facilitator' ? myGroupsFor(sv) : groupsFor(sv)
+    const first = pool[0]
     set({ staffSession: sv, staffGroup: first ? first.n : null, staffView: 'live', staffStatus: 'All', staffSearch: '' })
   }
   const onStaffGroup = (e) => set({ staffGroup: parseInt(e.target.value, 10), staffView: 'live', staffStatus: 'All', staffSearch: '' })
@@ -524,8 +570,10 @@ export function useCheckIn() {
     state, set,
     getRoster, stats, groupClients,
     groupsFor, getGroup, facById, facLabelFor,
+    myGroups, myGroupsFor,
     actions: {
-      goKiosk, goStaff, goLeader, goSettings, goAdmin, goAi, resetDemo, signOutUser, adoptSession, saveProfile,
+      goKiosk, goStaff, goMember, goCommunity, goLeader, goAnalytics, goSettings, goAdmin, goAi,
+      resetKioskHome, resetDemo, signOutUser, adoptSession, saveProfile,
       addGroup, removeGroup, assignFacilitator, addFacilitator, removeFacilitator,
       addClientsBulk, updateClientRec,
       padPressCode, setKSession, beginSession, beginSession2, setKMode, onMemberName, doCheck, nextMember, completeGroup,
